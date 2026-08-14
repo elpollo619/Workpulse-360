@@ -6,10 +6,10 @@ import { downloadDXF } from './dxf.js'
  * Plano de planta: vista cenital a escala real de las mediciones, con
  * exportación a SVG, PNG y DXF (CAD).
  */
-export default function FloorPlan({ measurements, photoName, roomName, onClose }) {
+export default function FloorPlan({ measurements, photoName, roomName, unitSys = 'm', onClose }) {
   const svgString = useMemo(
-    () => buildPlanSVG(measurements, { title: roomName || photoName }),
-    [measurements, roomName, photoName]
+    () => buildPlanSVG(measurements, { title: roomName || photoName, unitSys }),
+    [measurements, roomName, photoName, unitSys]
   )
   const baseName = (roomName || photoName || 'plano').replace(/\.[^.]+$/, '')
 

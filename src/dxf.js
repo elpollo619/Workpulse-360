@@ -51,6 +51,17 @@ export function buildDXF(measurements, roomName = 'HABITACION') {
     if (m.closed) {
       rows.push(...line(pts[pts.length - 1].x, pts[pts.length - 1].y, pts[0].x, pts[0].y, layerName))
     }
+    // Cotas por tramo en capa aparte (como los DXF de Polycam/magicplan).
+    if (pts.length >= 3) {
+      const nSegs = m.closed ? pts.length : pts.length - 1
+      for (let i = 0; i < nSegs; i++) {
+        const a = pts[i]
+        const b = pts[(i + 1) % pts.length]
+        const len = Math.hypot(b.x - a.x, b.y - a.y)
+        if (len < 0.05) continue
+        rows.push(...text((a.x + b.x) / 2, (a.y + b.y) / 2, 0.12, `${len.toFixed(2)}m`, 'COTAS'))
+      }
+    }
     const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length
     const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length
     rows.push(...text(cx, cy, 0.18, `${m.label} ${m.value.toFixed(2)}${m.unit === 'm²' ? 'm2' : m.unit}`, layerName))

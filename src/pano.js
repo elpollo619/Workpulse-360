@@ -67,3 +67,37 @@ export function objectHeight(footPoint, dirTop, h) {
   const yAtFoot = (dirTop.y / horizTop) * dHoriz
   return h + yAtFoot
 }
+
+/**
+ * Calibración de la altura de cámara con una distancia de referencia conocida
+ * (el "calibrate" de magicplan/PLNAR): la geometría del suelo escala
+ * linealmente con h, así que h_real = h_actual · D_real / D_medida.
+ */
+export function solveCameraHeight(currentH, measuredDist, realDist) {
+  if (!(currentH > 0) || !(measuredDist > 0) || !(realDist > 0)) return null
+  const h = currentH * (realDist / measuredDist)
+  return h > 0.2 && h < 10 ? h : null
+}
+
+/**
+ * Ajuste ortogonal tipo CAD: si el rumbo del segmento prev→p se acerca a un
+ * múltiplo de `stepDeg` (relativo a `refBearing`, en radianes), proyecta p
+ * sobre esa dirección. Devuelve el punto (ajustado o no) como {x,z}.
+ */
+export function snapToAngle(prev, p, refBearing = 0, stepDeg = 45, tolDeg = 6) {
+  const dx = p.x - prev.x
+  const dz = p.z - prev.z
+  const len = Math.hypot(dx, dz)
+  if (len < 1e-6) return p
+  const bearing = Math.atan2(dz, dx) - refBearing
+  const step = (stepDeg * Math.PI) / 180
+  const snapped = Math.round(bearing / step) * step
+  if (Math.abs(bearing - snapped) > (tolDeg * Math.PI) / 180) return p
+  const a = snapped + refBearing
+  return { x: prev.x + len * Math.cos(a), z: prev.z + len * Math.sin(a) }
+}
+
+/** Rumbo (radianes) del segmento a→b sobre el plano del suelo. */
+export function bearingOf(a, b) {
+  return Math.atan2(b.z - a.z, b.x - a.x)
+}

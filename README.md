@@ -7,11 +7,20 @@ del dispositivo.
 
 ## Funciones
 
-- 📏 Distancias · 📐 rutas y áreas · 📊 alturas de objetos
-- 📋 Mediciones guardadas con colores, renombrables, persistentes por foto
-- 🖼️ Varias fotos por sesión (habitaciones) con nombres (🏷️ Salón, Cocina…)
-- 🗺️ Plano de planta a escala real: export **SVG, PNG y DXF (CAD)**
-- 📊 Superficie total de la sesión (GLA) · 🖨️ informe imprimible/PDF · 📄 CSV
+- 📏 Distancias · 📐 rutas y áreas · 📊 alturas de objetos (con snap a plomada)
+- 🎯 **Calibración** sin conocer la altura de cámara: por distancia conocida en
+  el suelo o por altura conocida (🚪 puerta ≈ 2.03 m)
+- 🔍 **Lupa de precisión**, snapping ortogonal 45°/90°, cierre automático de
+  polígonos, colores de confianza por distancia y línea de horizonte
+- 🏷️ Etiquetas 3D flotantes con el valor de cada medición · ↩️ deshacer (Ctrl+Z)
+- 📐 Unidades: **m · cm · pies-pulgadas** (fracciones de ⅛″)
+- 🧭 Giroscopio en móvil · zoom con rueda o pellizco
+- 💾 **Fotos y mediciones persistentes** (IndexedDB + localStorage): la sesión
+  sobrevive a recargas · proyecto exportable/importable (JSON)
+- 🗺️ Plano de planta a escala con **cotas por tramo** y barra de escala:
+  export **SVG, PNG y DXF (CAD, con capa de cotas)**
+- 🖨️ Informe imprimible/PDF con **superficie, perímetro, paredes y volumen**
+  por habitación (quantity takeoff) y método auditable · 📄 CSV
 
 ## Desarrollo
 

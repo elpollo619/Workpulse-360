@@ -3,47 +3,115 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import {
   floorPointFromDirection, floorDistance, floorPathLength,
-  floorPolygonArea, objectHeight,
+  floorPolygonArea, objectHeight, solveCameraHeight, snapToAngle, bearingOf,
 } from './pano.js'
+import { UNIT_SYSTEMS, fmtLength, fmtArea, fmtValue } from './units.js'
 
 const MODES = [
   { id: 'distance', label: '📏 Distancia', hint: 'Toca dos puntos del SUELO' },
-  { id: 'path', label: '📐 Ruta / Área', hint: 'Encadena puntos del suelo; cierra la figura para el área' },
+  { id: 'path', label: '📐 Ruta / Área', hint: 'Encadena puntos del suelo; toca el 1º punto o ⬛ para cerrar' },
   { id: 'height', label: '📊 Altura', hint: 'Toca el PIE del objeto (en el suelo) y luego su parte ALTA' },
+  { id: 'calibrate', label: '🎯 Calibrar', hint: 'Toca 2 puntos del suelo con distancia CONOCIDA (p. ej. una baldosa o un metro plegable)' },
+  { id: 'calibv', label: '🚪 Puerta', hint: 'Calibrar con altura conocida: toca el PIE y el TOPE de una puerta (≈ 2.03 m) u otro objeto' },
 ]
+
+/** Color de confianza según la distancia horizontal del punto (modelo de error). */
+function confidenceColor(horizontal) {
+  if (horizontal == null) return '#ffffff'
+  if (horizontal < 4) return '#34d399'
+  if (horizontal < 8) return '#f59e0b'
+  return '#f87171'
+}
+
+/** Reorienta un rayo para que caiga en la misma vertical (yaw) que otro. */
+function plumbSnap(dir, refDir) {
+  const yaw = Math.atan2(refDir.x, refDir.z)
+  const pitch = Math.asin(Math.max(-1, Math.min(1, dir.y)))
+  const c = Math.cos(pitch)
+  return { x: c * Math.sin(yaw), y: Math.sin(pitch), z: c * Math.cos(yaw) }
+}
 
 export const MEASURE_COLORS = [
   '#34d399', '#60a5fa', '#f472b6', '#f59e0b',
   '#a78bfa', '#f87171', '#4ade80', '#22d3ee',
 ]
 
+const LOUPE = { size: 140, margin: 12, fov: 16 }
+
+/** Sprite de etiqueta (texto sobre fondo redondeado) para el visor. */
+function makeLabelSprite(text, color) {
+  const pad = 14
+  const fs = 30
+  const canvas = document.createElement('canvas')
+  const g = canvas.getContext('2d')
+  g.font = `600 ${fs}px system-ui, sans-serif`
+  const w = Math.ceil(g.measureText(text).width) + pad * 2
+  const h = fs + pad * 1.4
+  canvas.width = w
+  canvas.height = h
+  g.font = `600 ${fs}px system-ui, sans-serif`
+  g.fillStyle = 'rgba(10,14,18,0.82)'
+  g.beginPath()
+  if (g.roundRect) g.roundRect(1, 1, w - 2, h - 2, 12)
+  else g.rect(1, 1, w - 2, h - 2)
+  g.fill()
+  g.strokeStyle = color
+  g.lineWidth = 3
+  g.stroke()
+  g.fillStyle = '#fff'
+  g.textBaseline = 'middle'
+  g.fillText(text, pad, h / 2 + 1)
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.colorSpace = THREE.SRGBColorSpace
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }))
+  const scale = 4.2
+  sprite.scale.set((w / h) * scale, scale, 1)
+  return sprite
+}
+
+/** Tap sintético a partir de un punto del suelo (tras un ajuste ortogonal). */
+function tapFromFloorPoint(fp, h) {
+  const dir = new THREE.Vector3(fp.x, -h, fp.z).normalize()
+  return {
+    dir: { x: dir.x, y: dir.y, z: dir.z },
+    fp: { ...fp, y: -h, horizontal: Math.hypot(fp.x, fp.z), r: Math.hypot(fp.x, h, fp.z) },
+  }
+}
+
 /**
- * Visor de fotos 360° con medición real y mediciones persistentes.
- * Las medidas completadas se guardan (onSave) y se dibujan con un color por
- * medición; el borrador en curso va en blanco.
+ * Visor de fotos 360° con medición real, lupa de precisión, calibración,
+ * snapping ortogonal, etiquetas 3D, deshacer y giroscopio.
  */
 export default function Pano360View({
-  imageURL, measurements = [], onSave, onDelete, onRename, onOpenPlan, onClose, extraControls,
+  imageURL, measurements = [], onSave, onDelete, onRename, onOpenPlan, onClose,
+  extraControls, initialCamHeight = 1.6, onCamHeight, unitSys = 'm', onUnitSys,
 }) {
   const mountRef = useRef(null)
   const stateRef = useRef({})
-  const [camHeight, setCamHeight] = useState(1.6)
-  const camHeightRef = useRef(1.6)
+  const [camHeight, setCamHeight] = useState(initialCamHeight)
+  const camHeightRef = useRef(initialCamHeight)
   const [mode, setMode] = useState('distance')
   const modeRef = useRef('distance')
   const [taps, setTaps] = useState([])
   const tapsRef = useRef([])
   const [message, setMessage] = useState(MODES[0].hint)
   const [panelOpen, setPanelOpen] = useState(true)
+  const [ortho, setOrtho] = useState(true)
+  const orthoRef = useRef(true)
+  const [gyro, setGyro] = useState(false)
+  const gyroRef = useRef({ enabled: false, alpha: 0, beta: 0, gamma: 0, orient: 0, seen: false })
   const measurementsRef = useRef(measurements)
+  const unitRef = useRef(unitSys)
 
   useEffect(() => { tapsRef.current = taps }, [taps])
+  useEffect(() => { orthoRef.current = ortho }, [ortho])
+  useEffect(() => { unitRef.current = unitSys }, [unitSys])
 
   // El listener de clic se registra una sola vez; esta ref le da siempre las
   // funciones de guardado del render actual (evita cierres obsoletos).
   const apiRef = useRef({})
 
-  useEffect(() => { camHeightRef.current = camHeight }, [camHeight])
+  useEffect(() => { camHeightRef.current = camHeight; onCamHeight?.(camHeight) }, [camHeight])
   useEffect(() => { measurementsRef.current = measurements }, [measurements])
   useEffect(() => {
     modeRef.current = mode
@@ -69,8 +137,48 @@ export default function Pano360View({
       dirs: [a.dir, b.dir],
       camHeight: camHeightRef.current,
     })
-    setMessage(`📏 Guardado: ${value.toFixed(2)} m`)
+    setMessage(`📏 Guardado: ${fmtLength(value, unitRef.current)}`)
     setTaps([])
+  }
+
+  function applyCalibration(measured, promptText, defaultVal = '') {
+    const input = prompt(promptText, defaultVal)
+    if (input === null) { setTaps([]); return }
+    const real = parseFloat(String(input).replace(',', '.'))
+    // Toda la geometría escala linealmente con la altura de cámara, así que la
+    // misma regla de tres sirve para referencias horizontales y verticales.
+    const h = solveCameraHeight(camHeightRef.current, measured, real)
+    if (h == null) {
+      setMessage('⚠️ Valor no válido. La altura resultante debe estar entre 0.2 y 10 m.')
+    } else {
+      setCamHeight(Math.round(h * 100) / 100)
+      setMessage(`🎯 Altura de cámara calibrada: ${h.toFixed(2)} m. Las nuevas medidas la usarán.`)
+    }
+    setTaps([])
+  }
+
+  function calibrateWith(a, b) {
+    const measured = floorDistance(a.fp, b.fp)
+    applyCalibration(
+      measured,
+      `Distancia medida ahora: ${measured.toFixed(2)} m con cámara a ${camHeightRef.current.toFixed(2)} m.\n` +
+      '¿Cuál es la distancia REAL entre esos dos puntos, en metros?'
+    )
+  }
+
+  function calibrateVerticalWith(foot, topDir) {
+    const measured = objectHeight(foot.fp, topDir, camHeightRef.current)
+    if (measured == null || measured <= 0) {
+      setMessage('⚠️ No se pudo calcular. Toca el tope en la misma vertical del pie.')
+      setTaps([])
+      return
+    }
+    applyCalibration(
+      measured,
+      `Altura medida ahora: ${measured.toFixed(2)} m.\n` +
+      '¿Cuál es la altura REAL del objeto, en metros? (puerta estándar ≈ 2.03)',
+      '2.03'
+    )
   }
 
   function saveHeight(foot, topDir) {
@@ -90,12 +198,13 @@ export default function Pano360View({
       dirs: [foot.dir, topDir],
       camHeight: camHeightRef.current,
     })
-    setMessage(`📊 Guardado: altura ${value.toFixed(2)} m`)
+    setMessage(`📊 Guardado: altura ${fmtLength(value, unitRef.current)}`)
     setTaps([])
   }
 
   function savePath(close) {
-    const floorPts = taps.filter((t) => t.fp).map((t) => t.fp)
+    const current = tapsRef.current
+    const floorPts = current.filter((t) => t.fp).map((t) => t.fp)
     if (floorPts.length < 2) return
     const isArea = close && floorPts.length >= 3
     const value = isArea
@@ -109,17 +218,82 @@ export default function Pano360View({
       unit: isArea ? 'm²' : 'm',
       perimeter: isArea ? floorPathLength([...floorPts, floorPts[0]]) : undefined,
       points: floorPts,
-      dirs: taps.map((t) => t.dir),
+      dirs: current.map((t) => t.dir),
       closed: isArea,
       camHeight: camHeightRef.current,
     })
     setMessage(isArea
-      ? `📐 Guardado: área ${value.toFixed(2)} m²`
-      : `📐 Guardado: ruta ${value.toFixed(2)} m`)
+      ? `📐 Guardado: área ${fmtArea(value, unitRef.current)}`
+      : `📐 Guardado: ruta ${fmtLength(value, unitRef.current)}`)
     setTaps([])
   }
 
-  apiRef.current = { saveDistance, saveHeight }
+  function undo() {
+    if (tapsRef.current.length > 0) {
+      setTaps((p) => p.slice(0, -1))
+      setMessage('↩️ Punto deshecho')
+    } else if (measurementsRef.current.length > 0) {
+      const last = measurementsRef.current[measurementsRef.current.length - 1]
+      onDelete?.(last.id)
+      setMessage(`↩️ Medición ${last.label} eliminada`)
+    }
+  }
+
+  apiRef.current = { saveDistance, saveHeight, savePath, calibrateWith, calibrateVerticalWith, undo }
+
+  // Atajos de teclado: Ctrl+Z deshacer, Escape cancelar, Enter cerrar área.
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        apiRef.current.undo()
+      } else if (e.key === 'Escape') {
+        setTaps([])
+      } else if (e.key === 'Enter' && modeRef.current === 'path' && tapsRef.current.length >= 3) {
+        apiRef.current.savePath(true)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  // Giroscopio (móvil): mirar moviendo el teléfono, como los visores de tours.
+  async function toggleGyro() {
+    if (!gyro && typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+      try {
+        const res = await DeviceOrientationEvent.requestPermission()
+        if (res !== 'granted') { setMessage('⚠️ Permiso de giroscopio denegado.'); return }
+      } catch { setMessage('⚠️ No se pudo pedir permiso de giroscopio.'); return }
+    }
+    setGyro((v) => {
+      gyroRef.current.enabled = !v
+      return !v
+    })
+  }
+
+  useEffect(() => {
+    const onOrient = (e) => {
+      const g = gyroRef.current
+      if (e.alpha == null) return
+      g.alpha = THREE.MathUtils.degToRad(e.alpha)
+      g.beta = THREE.MathUtils.degToRad(e.beta)
+      g.gamma = THREE.MathUtils.degToRad(e.gamma)
+      g.seen = true
+    }
+    const onScreen = () => {
+      gyroRef.current.orient = THREE.MathUtils.degToRad(
+        (screen.orientation?.angle ?? window.orientation ?? 0)
+      )
+    }
+    onScreen()
+    window.addEventListener('deviceorientation', onOrient)
+    window.addEventListener('orientationchange', onScreen)
+    return () => {
+      window.removeEventListener('deviceorientation', onOrient)
+      window.removeEventListener('orientationchange', onScreen)
+    }
+  }, [])
 
   useEffect(() => {
     if (!imageURL || !mountRef.current) return
@@ -128,6 +302,7 @@ export default function Pano360View({
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(75, mount.clientWidth / mount.clientHeight, 0.1, 200)
     camera.position.set(0, 0, 0.01)
+    const loupeCamera = new THREE.PerspectiveCamera(LOUPE.fov, 1, 0.1, 200)
     const renderer = new THREE.WebGLRenderer({ antialias: true })
     renderer.setSize(mount.clientWidth, mount.clientHeight)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
@@ -148,62 +323,183 @@ export default function Pano360View({
     const draftGroup = new THREE.Group()
     scene.add(savedGroup, draftGroup)
 
+    // Línea de horizonte: guía sutil para comprobar la nivelación de la foto
+    // y saber desde dónde "empieza el suelo" al tocar.
+    const horizonPts = []
+    for (let i = 0; i <= 128; i++) {
+      const a = (i / 128) * Math.PI * 2
+      horizonPts.push(new THREE.Vector3(Math.cos(a) * 49, 0, Math.sin(a) * 49))
+    }
+    const horizon = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(horizonPts),
+      new THREE.LineBasicMaterial({ color: 0x8b9aa7, transparent: true, opacity: 0.35 })
+    )
+    scene.add(horizon)
+
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableZoom = false
     controls.enablePan = false
     controls.rotateSpeed = -0.35
 
-    const onWheel = (e) => {
-      camera.fov = Math.min(100, Math.max(30, camera.fov + e.deltaY * 0.05))
+    const setFov = (f) => {
+      camera.fov = Math.min(100, Math.max(20, f))
       camera.updateProjectionMatrix()
     }
-    renderer.domElement.addEventListener('wheel', onWheel)
+    const onWheel = (e) => {
+      e.preventDefault()
+      setFov(camera.fov + e.deltaY * 0.05)
+    }
+    renderer.domElement.addEventListener('wheel', onWheel, { passive: false })
+
+    // Zoom con pellizco (dos dedos) en móvil.
+    let pinchDist = 0
+    const onTouchStart = (e) => {
+      if (e.touches.length === 2) {
+        controls.enabled = false
+        pinchDist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        )
+      }
+    }
+    const onTouchMove = (e) => {
+      if (e.touches.length === 2 && pinchDist > 0) {
+        e.preventDefault()
+        const d = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        )
+        setFov(camera.fov * (pinchDist / d))
+        pinchDist = d
+      }
+    }
+    const onTouchEnd = (e) => {
+      if (e.touches.length < 2) { pinchDist = 0; controls.enabled = !gyroRef.current.enabled }
+    }
+    renderer.domElement.addEventListener('touchstart', onTouchStart, { passive: false })
+    renderer.domElement.addEventListener('touchmove', onTouchMove, { passive: false })
+    renderer.domElement.addEventListener('touchend', onTouchEnd)
 
     const raycaster = new THREE.Raycaster()
-    let downAt = null
-    const onDown = (e) => { downAt = [e.clientX, e.clientY] }
-    const onUp = (e) => {
-      if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6) return
+    const pointer = { x: 0, y: 0, active: false }
+    const ndcFromEvent = (e) => {
       const rect = renderer.domElement.getBoundingClientRect()
-      const ndc = new THREE.Vector2(
+      return new THREE.Vector2(
         ((e.clientX - rect.left) / rect.width) * 2 - 1,
         -((e.clientY - rect.top) / rect.height) * 2 + 1
       )
-      raycaster.setFromCamera(ndc, camera)
+    }
+
+    let downAt = null
+    const onDown = (e) => { downAt = [e.clientX, e.clientY] }
+    const paneEl = mount.closest('.pano360')
+    const onMove = (e) => {
+      const rect = renderer.domElement.getBoundingClientRect()
+      pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
+      pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
+      pointer.active = true
+      paneEl?.classList.add('loupe-on')
+    }
+    const onLeave = () => {
+      pointer.active = false
+      paneEl?.classList.remove('loupe-on')
+    }
+    const onUp = (e) => {
+      if (e.pointerType === 'touch') {
+        // En táctil la lupa solo vive mientras el dedo está en pantalla.
+        pointer.active = false
+        paneEl?.classList.remove('loupe-on')
+      }
+      if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6) return
+      raycaster.setFromCamera(ndcFromEvent(e), camera)
       const dir = raycaster.ray.direction.clone().normalize()
       const m = modeRef.current
-      const fp = floorPointFromDirection(dir, camHeightRef.current)
+      const h = camHeightRef.current
+      let fp = floorPointFromDirection(dir, h)
 
       // Lógica fuera del actualizador de estado para no duplicar guardados.
       const prev = tapsRef.current
-      const tap = { dir: { x: dir.x, y: dir.y, z: dir.z }, fp }
-      if (m === 'distance') {
+      let tap = { dir: { x: dir.x, y: dir.y, z: dir.z }, fp }
+      if (m === 'distance' || m === 'calibrate') {
         if (!fp) { setMessage('⚠️ Ese punto no está en el suelo. Apunta más abajo.'); return }
-        if (prev.length === 1) apiRef.current.saveDistance(prev[0], tap)
-        else setTaps([tap])
+        if (prev.length === 1) {
+          m === 'calibrate'
+            ? apiRef.current.calibrateWith(prev[0], tap)
+            : apiRef.current.saveDistance(prev[0], tap)
+        } else setTaps([tap])
       } else if (m === 'path') {
         if (!fp) { setMessage('⚠️ Ese punto no está en el suelo. Apunta más abajo.'); return }
+        // Cierre automático: tocar cerca del primer punto cierra el polígono.
+        if (prev.length >= 3 && prev[0].fp) {
+          const closeTol = Math.max(0.15, floorPathLength(prev.map((t) => t.fp)) * 0.02)
+          if (floorDistance(fp, prev[0].fp) < closeTol) { apiRef.current.savePath(true); return }
+        }
+        // Snapping ortogonal tipo CAD (45°) respecto al primer tramo.
+        if (orthoRef.current && prev.length >= 1 && prev[prev.length - 1].fp) {
+          const ref = prev.length >= 2 && prev[0].fp && prev[1].fp
+            ? bearingOf(prev[0].fp, prev[1].fp) : 0
+          const snapped = snapToAngle(prev[prev.length - 1].fp, fp, ref)
+          if (snapped !== fp) tap = tapFromFloorPoint(snapped, h)
+        }
         setTaps([...prev, tap])
       } else {
-        // height
+        // height / calibración vertical: pie en el suelo + tope a plomada
         if (prev.length === 0) {
           if (!fp) { setMessage('⚠️ El PIE debe estar en el suelo. Toca la base del objeto.'); return }
           setTaps([tap])
         } else {
-          apiRef.current.saveHeight(prev[0], tap.dir)
+          // Snap a plomada: el tope se lleva a la misma vertical que el pie.
+          const topDir = plumbSnap(tap.dir, prev[0].dir)
+          m === 'calibv'
+            ? apiRef.current.calibrateVerticalWith(prev[0], topDir)
+            : apiRef.current.saveHeight(prev[0], topDir)
         }
       }
     }
     renderer.domElement.addEventListener('pointerdown', onDown)
+    renderer.domElement.addEventListener('pointermove', onMove)
+    renderer.domElement.addEventListener('pointerleave', onLeave)
     renderer.domElement.addEventListener('pointerup', onUp)
 
     stateRef.current = { scene, camera, renderer, savedGroup, draftGroup, controls, sphere }
 
+    // Orientación por giroscopio (algoritmo W3C clásico de three.js).
+    const zee = new THREE.Vector3(0, 0, 1)
+    const euler = new THREE.Euler()
+    const q0 = new THREE.Quaternion()
+    const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5))
+
     let raf
     const animate = () => {
       raf = requestAnimationFrame(animate)
-      controls.update()
+      const g = gyroRef.current
+      if (g.enabled && g.seen) {
+        controls.enabled = false
+        euler.set(g.beta, g.alpha, -g.gamma, 'YXZ')
+        camera.quaternion.setFromEuler(euler)
+        camera.quaternion.multiply(q1)
+        camera.quaternion.multiply(q0.setFromAxisAngle(zee, -g.orient))
+      } else {
+        if (!controls.enabled && pinchDist === 0) controls.enabled = true
+        controls.update()
+      }
+
+      renderer.setViewport(0, 0, mount.clientWidth, mount.clientHeight)
+      renderer.setScissorTest(false)
       renderer.render(scene, camera)
+
+      // Lupa de precisión: vista ampliada de donde está el puntero.
+      if (pointer.active) {
+        raycaster.setFromCamera(pointer, camera)
+        loupeCamera.position.set(0, 0, 0)
+        loupeCamera.lookAt(raycaster.ray.direction)
+        const y = 64
+        renderer.setViewport(LOUPE.margin, y, LOUPE.size, LOUPE.size)
+        renderer.setScissor(LOUPE.margin, y, LOUPE.size, LOUPE.size)
+        renderer.setScissorTest(true)
+        renderer.render(scene, loupeCamera)
+        renderer.setScissorTest(false)
+      }
     }
     animate()
 
@@ -218,7 +514,12 @@ export default function Pano360View({
       cancelAnimationFrame(raf)
       window.removeEventListener('resize', onResize)
       renderer.domElement.removeEventListener('wheel', onWheel)
+      renderer.domElement.removeEventListener('touchstart', onTouchStart)
+      renderer.domElement.removeEventListener('touchmove', onTouchMove)
+      renderer.domElement.removeEventListener('touchend', onTouchEnd)
       renderer.domElement.removeEventListener('pointerdown', onDown)
+      renderer.domElement.removeEventListener('pointermove', onMove)
+      renderer.domElement.removeEventListener('pointerleave', onLeave)
       renderer.domElement.removeEventListener('pointerup', onUp)
       controls.dispose()
       sphere.geometry.dispose()
@@ -232,13 +533,27 @@ export default function Pano360View({
   const anchor = (dir) =>
     new THREE.Vector3(dir.x, dir.y, dir.z).normalize().multiplyScalar(48)
 
-  // Dibuja las mediciones guardadas (un color por medición).
+  // Un segmento recto del suelo se ve CURVO en la esfera equirectangular:
+  // se muestrea en el plano del suelo y se reproyecta punto a punto.
+  const segmentArc = (p1, p2, camH, segs = 16) => {
+    const pts = []
+    for (let i = 0; i <= segs; i++) {
+      const t = i / segs
+      const x = p1.x + (p2.x - p1.x) * t
+      const z = p1.z + (p2.z - p1.z) * t
+      pts.push(new THREE.Vector3(x, -camH, z).normalize().multiplyScalar(48))
+    }
+    return pts
+  }
+
+  // Dibuja las mediciones guardadas (un color y una etiqueta por medición).
   useEffect(() => {
     const { savedGroup } = stateRef.current
     if (!savedGroup) return
     savedGroup.clear()
     measurements.forEach((mm, idx) => {
-      const color = new THREE.Color(MEASURE_COLORS[idx % MEASURE_COLORS.length])
+      const colorHex = MEASURE_COLORS[idx % MEASURE_COLORS.length]
+      const color = new THREE.Color(colorHex)
       const anchors = (mm.dirs ?? []).map(anchor)
       for (const a of anchors) {
         const s = new THREE.Mesh(
@@ -248,15 +563,40 @@ export default function Pano360View({
         s.position.copy(a)
         savedGroup.add(s)
       }
-      if (anchors.length >= 2) {
-        const pts = mm.closed ? [...anchors, anchors[0]] : anchors
+      // Línea de la medición, curvada correctamente sobre la esfera.
+      const camH = mm.camHeight ?? camHeightRef.current
+      let linePts = null
+      if (mm.mode === 'height' && mm.points?.[0]) {
+        const p = mm.points[0]
+        const topY = mm.value - camH
+        linePts = []
+        for (let i = 0; i <= 12; i++) {
+          const y = -camH + (topY + camH) * (i / 12)
+          linePts.push(new THREE.Vector3(p.x, y, p.z).normalize().multiplyScalar(48))
+        }
+      } else if ((mm.points?.length ?? 0) >= 2) {
+        const seq = mm.closed ? [...mm.points, mm.points[0]] : mm.points
+        linePts = []
+        for (let i = 1; i < seq.length; i++) linePts.push(...segmentArc(seq[i - 1], seq[i], camH))
+      } else if (anchors.length >= 2) {
+        linePts = mm.closed ? [...anchors, anchors[0]] : anchors
+      }
+      if (linePts) {
         savedGroup.add(new THREE.Line(
-          new THREE.BufferGeometry().setFromPoints(pts),
+          new THREE.BufferGeometry().setFromPoints(linePts),
           new THREE.LineBasicMaterial({ color })
         ))
       }
+      // Etiqueta flotante con el valor, en el punto medio de la medición.
+      const labelAnchors = linePts?.length ? linePts : anchors
+      if (labelAnchors.length >= 1) {
+        const mid = labelAnchors[Math.floor(labelAnchors.length / 2)].clone()
+        const sprite = makeLabelSprite(`${mm.label} · ${fmtValue(mm, unitSys)}`, colorHex)
+        sprite.position.copy(mid.normalize().multiplyScalar(44))
+        savedGroup.add(sprite)
+      }
     })
-  }, [measurements, imageURL])
+  }, [measurements, imageURL, unitSys])
 
   // Dibuja el borrador y actualiza el mensaje.
   useEffect(() => {
@@ -264,61 +604,87 @@ export default function Pano360View({
     if (!draftGroup) return
     draftGroup.clear()
     const anchors = taps.map((t) => anchor(t.dir))
-    for (const a of anchors) {
+    taps.forEach((t, i) => {
+      // Color de confianza: verde cerca, ámbar a media distancia, rojo lejos.
       const s = new THREE.Mesh(
         new THREE.SphereGeometry(0.65, 14, 10),
-        new THREE.MeshBasicMaterial({ color: 0xffffff })
+        new THREE.MeshBasicMaterial({ color: new THREE.Color(confidenceColor(t.fp?.horizontal)) })
       )
-      s.position.copy(a)
+      s.position.copy(anchors[i])
       draftGroup.add(s)
-    }
+    })
     if (anchors.length >= 2) {
+      const camH = camHeightRef.current
+      const allFloor = taps.every((t) => t.fp)
+      let linePts = anchors
+      if (allFloor) {
+        linePts = []
+        for (let i = 1; i < taps.length; i++) linePts.push(...segmentArc(taps[i - 1].fp, taps[i].fp, camH))
+      }
       draftGroup.add(new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints(anchors),
+        new THREE.BufferGeometry().setFromPoints(linePts),
         new THREE.LineBasicMaterial({ color: 0xffffff })
       ))
     }
 
     if (taps.length === 0) return
     const floorPts = taps.filter((t) => t.fp).map((t) => t.fp)
-    if (mode === 'distance' && floorPts.length === 1) {
-      setMessage(`📍 A ${floorPts[0].horizontal.toFixed(2)} m de la cámara. Toca el segundo punto.`)
+    const u = unitSys
+    if ((mode === 'distance' || mode === 'calibrate') && floorPts.length === 1) {
+      setMessage(`📍 A ${fmtLength(floorPts[0].horizontal, u)} de la cámara. Toca el segundo punto.`)
     } else if (mode === 'path') {
-      setMessage(`📐 ${floorPts.length} puntos · recorrido ${floorPathLength(floorPts).toFixed(2)} m`)
-    } else if (mode === 'height' && taps.length === 1) {
-      setMessage(`📍 Pie a ${floorPts[0].horizontal.toFixed(2)} m. Ahora toca la parte ALTA.`)
+      const closed = floorPts.length >= 3
+        ? ` · área si cierras: ${fmtArea(floorPolygonArea(floorPts), u)}`
+        : ''
+      setMessage(`📐 ${floorPts.length} puntos · recorrido ${fmtLength(floorPathLength(floorPts), u)}${closed}`)
+    } else if ((mode === 'height' || mode === 'calibv') && taps.length === 1) {
+      const far = floorPts[0].horizontal > 8 ? ' ⚠️ punto muy lejano, precisión baja' : ''
+      setMessage(`📍 Pie a ${fmtLength(floorPts[0].horizontal, u)}. Ahora toca la parte ALTA (se ajusta a plomada).${far}`)
     }
-  }, [taps, mode])
+  }, [taps, mode, unitSys])
 
   return (
     <div className="pano360">
       <div ref={mountRef} className="pano360-canvas" />
+      <div className="pano360-loupe-frame" aria-hidden />
 
       <div className="pano360-top">
         {extraControls}
         <div className="pano360-modes">
           {MODES.map((m) => (
-            <button key={m.id} className={mode === m.id ? 'active' : ''} onClick={() => setMode(m.id)}>
+            <button key={m.id} className={mode === m.id ? 'active' : ''} onClick={() => setMode(m.id)}
+              title={m.hint}>
               {m.label}
             </button>
           ))}
         </div>
-        <label>
+        <label title="Altura de la cámara sobre el suelo (m). Usa 🎯 Calibrar si no la conoces con exactitud.">
           📷
           <input
             type="number" min="0.3" max="5" step="0.1" value={camHeight}
             onChange={(e) => setCamHeight(parseFloat(e.target.value) || 1.6)}
-            title="Altura de la cámara (m)"
           /> m
         </label>
+        <select value={unitSys} onChange={(e) => onUnitSys?.(e.target.value)} title="Unidades">
+          {UNIT_SYSTEMS.map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}
+        </select>
+        {mode === 'path' && (
+          <button className={ortho ? 'active' : ''} onClick={() => setOrtho((v) => !v)}
+            title="Snapping ortogonal: ajusta los tramos a ángulos de 45°/90°">
+            ⟂
+          </button>
+        )}
         {mode === 'path' && taps.length > 0 && (
           <>
-            <button onClick={() => setTaps((p) => p.slice(0, -1))}>↩️</button>
             {taps.length >= 3 && <button onClick={() => savePath(true)}>⬛ Área</button>}
             {taps.length >= 2 && <button onClick={() => savePath(false)}>💾 Ruta</button>}
           </>
         )}
-        <button onClick={() => { setTaps([]); setMessage(MODES.find((m) => m.id === mode)?.hint ?? '') }}>🗑️</button>
+        <button onClick={undo} title="Deshacer último punto o medición (Ctrl+Z)">↩️</button>
+        <button onClick={() => { setTaps([]); setMessage(MODES.find((m) => m.id === mode)?.hint ?? '') }}
+          title="Cancelar puntos en curso">🗑️</button>
+        <button className={gyro ? 'active' : ''} onClick={toggleGyro}
+          title="Giroscopio: mirar moviendo el teléfono">🧭</button>
         <button onClick={() => setPanelOpen((v) => !v)}>📋</button>
         <button onClick={onClose}>✕</button>
       </div>
@@ -339,8 +705,8 @@ export default function Pano360View({
                   {mm.label}
                 </span>
                 <span className="val">
-                  {mm.value.toFixed(2)} {mm.unit}
-                  {mm.mode === 'area' && mm.perimeter ? ` · per. ${mm.perimeter.toFixed(1)} m` : ''}
+                  {fmtValue(mm, unitSys)}
+                  {mm.mode === 'area' && mm.perimeter ? ` · per. ${fmtLength(mm.perimeter, unitSys, 1)}` : ''}
                 </span>
                 <button className="del" onClick={() => onDelete?.(mm.id)}>✕</button>
               </li>
@@ -357,7 +723,7 @@ export default function Pano360View({
 
       <div className="pano360-msg">{message}</div>
       <div className="pano360-hint">
-        Suelo plano + altura de cámara bien medida = medidas fiables · arrastra para mirar, rueda para zoom
+        Suelo plano + altura de cámara calibrada = medidas fiables · arrastra para mirar · rueda o pellizco para zoom
       </div>
     </div>
   )

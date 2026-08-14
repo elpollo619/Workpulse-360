@@ -3,6 +3,7 @@
 // las posiciones vienen de la trigonometría sobre el plano del suelo.
 
 import { MEASURE_COLORS } from './Pano360View.jsx'
+import { fmtLength, fmtArea } from './units.js'
 
 export function planGeometry(measurements, W = 640, H = 480, PAD = 40) {
   const pts = [{ x: 0, z: 0 }]
@@ -25,7 +26,7 @@ export function planGeometry(measurements, W = 640, H = 480, PAD = 40) {
  * @param {{title?:string, dark?:boolean}} opts
  */
 export function buildPlanSVG(measurements, opts = {}) {
-  const { title = '', dark = true } = opts
+  const { title = '', dark = true, unitSys = 'm' } = opts
   const geo = planGeometry(measurements)
   const gridStep = geo.scale > 60 ? 1 : geo.scale > 25 ? 2 : 5
   const bg = dark ? '#0f1418' : '#ffffff'
@@ -74,10 +75,50 @@ export function buildPlanSVG(measurements, opts = {}) {
     for (const p of pts) {
       parts.push(`<circle cx="${geo.sx(p.x).toFixed(1)}" cy="${geo.sy(p.z).toFixed(1)}" r="3" fill="${color}"/>`)
     }
+    // Cotas por tramo (estilo plano de arquitecto), cuando hay 3+ vértices.
+    if (pts.length >= 3) {
+      const nSegs = m.closed ? pts.length : pts.length - 1
+      for (let i = 0; i < nSegs; i++) {
+        const a = pts[i]
+        const b = pts[(i + 1) % pts.length]
+        const len = Math.hypot(b.x - a.x, b.z - a.z)
+        if (len < 0.05) continue
+        const mx = (geo.sx(a.x) + geo.sx(b.x)) / 2
+        const my = (geo.sy(a.z) + geo.sy(b.z)) / 2
+        const dx = geo.sx(b.x) - geo.sx(a.x)
+        const dy = geo.sy(b.z) - geo.sy(a.z)
+        const L = Math.hypot(dx, dy) || 1
+        // Desplazamiento perpendicular hacia fuera del centroide.
+        let ox = (-dy / L) * 10
+        let oy = (dx / L) * 10
+        if ((mx - cx) * ox + (my - cz) * oy < 0) {
+          ox = -ox
+          oy = -oy
+        }
+        parts.push(
+          `<text x="${(mx + ox).toFixed(1)}" y="${(my + oy + 3).toFixed(1)}" text-anchor="middle" font-size="9.5" fill="${dimC}">${fmtLength(len, unitSys)}</text>`
+        )
+      }
+    }
+    const valText = m.unit === 'm²' ? fmtArea(m.value, unitSys) : fmtLength(m.value, unitSys)
     parts.push(
-      `<text x="${cx.toFixed(1)}" y="${cz.toFixed(1)}" text-anchor="middle" font-size="12" fill="${color}">${escapeXML(m.label)}: ${m.value.toFixed(2)} ${m.unit}</text>`
+      `<text x="${cx.toFixed(1)}" y="${cz.toFixed(1)}" text-anchor="middle" font-size="12" font-weight="600" fill="${color}">${escapeXML(m.label)}: ${valText}</text>`
     )
   })
+
+  // Barra de escala (abajo a la izquierda).
+  {
+    const barM = gridStep
+    const bx = 14
+    const by = geo.H - 14
+    const bw = barM * geo.scale
+    parts.push(
+      `<line x1="${bx}" y1="${by}" x2="${(bx + bw).toFixed(1)}" y2="${by}" stroke="${textC}" stroke-width="2"/>`,
+      `<line x1="${bx}" y1="${by - 4}" x2="${bx}" y2="${by + 4}" stroke="${textC}" stroke-width="2"/>`,
+      `<line x1="${(bx + bw).toFixed(1)}" y1="${by - 4}" x2="${(bx + bw).toFixed(1)}" y2="${by + 4}" stroke="${textC}" stroke-width="2"/>`,
+      `<text x="${(bx + bw / 2).toFixed(1)}" y="${by - 7}" text-anchor="middle" font-size="10" fill="${dimC}">${fmtLength(barM, unitSys, 0)}</text>`
+    )
+  }
 
   parts.push(
     `<circle cx="${geo.sx(0).toFixed(1)}" cy="${geo.sy(0).toFixed(1)}" r="6" fill="${textC}"/>`,
