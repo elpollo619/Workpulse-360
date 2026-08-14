@@ -228,6 +228,27 @@ export default function Pano360View({
     setTaps([])
   }
 
+  function screenshot() {
+    const { renderer } = stateRef.current
+    renderer?.domElement.toBlob((blob) => {
+      if (!blob) return
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'workpulse360-captura.png'
+      a.click()
+      URL.revokeObjectURL(url)
+      setMessage('📸 Captura descargada (vista actual con mediciones)')
+    }, 'image/png')
+  }
+
+  function copyValue(mm) {
+    const txt = fmtValue(mm, unitRef.current)
+    navigator.clipboard?.writeText(txt)
+      .then(() => setMessage(`📋 Copiado: ${mm.label} = ${txt}`))
+      .catch(() => {})
+  }
+
   function undo() {
     if (tapsRef.current.length > 0) {
       setTaps((p) => p.slice(0, -1))
@@ -303,7 +324,7 @@ export default function Pano360View({
     const camera = new THREE.PerspectiveCamera(75, mount.clientWidth / mount.clientHeight, 0.1, 200)
     camera.position.set(0, 0, 0.01)
     const loupeCamera = new THREE.PerspectiveCamera(LOUPE.fov, 1, 0.1, 200)
-    const renderer = new THREE.WebGLRenderer({ antialias: true })
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true })
     renderer.setSize(mount.clientWidth, mount.clientHeight)
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     mount.appendChild(renderer.domElement)
@@ -685,6 +706,7 @@ export default function Pano360View({
           title="Cancelar puntos en curso">🗑️</button>
         <button className={gyro ? 'active' : ''} onClick={toggleGyro}
           title="Giroscopio: mirar moviendo el teléfono">🧭</button>
+        <button onClick={screenshot} title="Descargar captura PNG de la vista con las mediciones">📸</button>
         <button onClick={() => setPanelOpen((v) => !v)}>📋</button>
         <button onClick={onClose}>✕</button>
       </div>
@@ -704,7 +726,8 @@ export default function Pano360View({
                 >
                   {mm.label}
                 </span>
-                <span className="val">
+                <span className="val" style={{ cursor: 'copy' }} title="Clic para copiar el valor"
+                  onClick={() => copyValue(mm)}>
                   {fmtValue(mm, unitSys)}
                   {mm.mode === 'area' && mm.perimeter ? ` · per. ${fmtLength(mm.perimeter, unitSys, 1)}` : ''}
                 </span>

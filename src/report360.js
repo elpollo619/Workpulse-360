@@ -49,6 +49,11 @@ export function openSessionReport(store, roomNames = {}, opts = {}) {
     if (avgHeight != null) stats.push(`Altura media: <b>${fmtLength(avgHeight, u)}</b>`)
     if (wallArea != null) stats.push(`Paredes (per. × alt.): <b>${fmtArea(wallArea, u)}</b>`)
     if (volume != null) stats.push(`Volumen: <b>${fmtVolume(volume, u)}</b>`)
+    // Estimación orientativa de pintura: 2 manos a 10 m²/L, paredes + techo.
+    if (wallArea != null) {
+      const paintL = ((wallArea + roomArea) * 2) / 10
+      stats.push(`Pintura orient.: <b>${paintL.toFixed(1)} L</b> <small>(2 manos, paredes+techo)</small>`)
+    }
 
     const plan = ms.some((m) => (m.points?.length ?? 0) >= 2)
       ? buildPlanSVG(ms, { title: name, dark: false, unitSys: u })
