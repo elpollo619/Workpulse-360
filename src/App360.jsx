@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Pano360View from './Pano360View.jsx'
 import FloorPlan from './FloorPlan.jsx'
+import PlanAssembly from './PlanAssembly.jsx'
 import { openSessionReport } from './report360.js'
 import { savePhoto, listPhotos, deletePhoto } from './photostore.js'
 import { fmtArea } from './units.js'
@@ -11,6 +12,9 @@ const NAMES_KEY = 'workpulse360.roomnames.v1'
 const HEIGHTS_KEY = 'workpulse360.camheights.v1'
 const UNITS_KEY = 'workpulse360.units.v1'
 const TYPES_KEY = 'workpulse360.roomtypes.v1'
+const WEIGHTS_KEY = 'workpulse360.weights.v1'
+
+const DEFAULT_WEIGHTS = { BALKON: 0.5, TERRASSE: 1 / 3, GARTEN: 0.1 }
 
 function loadJSON(key) {
   try {
@@ -32,8 +36,10 @@ export default function App360() {
   const [roomNames, setRoomNames] = useState(() => loadJSON(NAMES_KEY)) // { [photoName]: 'Salón' }
   const [camHeights, setCamHeights] = useState(() => loadJSON(HEIGHTS_KEY)) // { [photoName]: 1.6 }
   const [roomTypes, setRoomTypes] = useState(() => loadJSON(TYPES_KEY)) // { [photoName]: 'HNF' }
+  const [weights, setWeights] = useState(() => ({ ...DEFAULT_WEIGHTS, ...loadJSON(WEIGHTS_KEY) }))
   const [unitSys, setUnitSys] = useState(() => localStorage.getItem(UNITS_KEY) || 'm')
   const [showPlan, setShowPlan] = useState(false)
+  const [showAssembly, setShowAssembly] = useState(false)
   const [restoring, setRestoring] = useState(true)
   const importRef = useRef(null)
 
@@ -53,6 +59,9 @@ export default function App360() {
   useEffect(() => {
     localStorage.setItem(TYPES_KEY, JSON.stringify(roomTypes))
   }, [roomTypes])
+  useEffect(() => {
+    localStorage.setItem(WEIGHTS_KEY, JSON.stringify(weights))
+  }, [weights])
 
   // Restaurar las fotos guardadas en IndexedDB (la sesión sobrevive recargas).
   useEffect(() => {
@@ -158,7 +167,7 @@ export default function App360() {
       app: 'workpulse360',
       version: 1,
       exportedAt: new Date().toISOString(),
-      store, roomNames, camHeights, roomTypes, unitSys,
+      store, roomNames, camHeights, roomTypes, weights, unitSys,
     }
     const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' })
     trigger(blob, 'proyecto-workpulse360.json')
@@ -175,6 +184,7 @@ export default function App360() {
       setRoomNames((prev) => ({ ...prev, ...data.roomNames }))
       setCamHeights((prev) => ({ ...prev, ...data.camHeights }))
       setRoomTypes((prev) => ({ ...prev, ...data.roomTypes }))
+      if (data.weights) setWeights((prev) => ({ ...prev, ...data.weights }))
       if (data.unitSys) setUnitSys(data.unitSys)
       alert(`Proyecto importado: ${Object.keys(data.store).length} espacio(s). Abre las fotos con el mismo nombre para ver las mediciones.`)
     }).catch(() => alert('Ese archivo no parece un proyecto de Workpulse 360.'))
@@ -249,6 +259,8 @@ export default function App360() {
   }
 
   const totalMeasurements = Object.values(store).reduce((s, ms) => s + ms.length, 0)
+  const roomsWithOutline = Object.values(store)
+    .filter((ms) => ms.some((m) => m.mode === 'area' && (m.points?.length ?? 0) >= 3)).length
   const totalArea = Object.values(store)
     .flat()
     .filter((m) => m.mode === 'area')
@@ -317,8 +329,14 @@ export default function App360() {
         {totalMeasurements > 0 && (
           <>
             <button onClick={exportCSV}>📄 CSV ({totalMeasurements})</button>
-            <button onClick={() => openSessionReport(store, roomNames, { unitSys, roomTypes })}>🖨️ Informe de sesión</button>
+            <button onClick={() => openSessionReport(store, roomNames, { unitSys, roomTypes, weights })}>🖨️ Informe de sesión</button>
             <button onClick={exportProject} title="Descarga las mediciones como archivo de proyecto">💾 Proyecto</button>
+            {roomsWithOutline > 0 && (
+              <button onClick={() => setShowAssembly(true)}
+                title="Ensamblar todas las habitaciones en un plano de conjunto">
+                🧩 Plano general
+              </button>
+            )}
           </>
         )}
         <button onClick={() => importRef.current?.click()} title="Cargar un proyecto exportado antes">📂 Importar proyecto</button>
@@ -338,6 +356,26 @@ export default function App360() {
           encimera 0.90 m (norma de cocina suiza), interruptor ≈ 1.05 m,
           barandilla 0.90–1.00 m (SIA 358), hoja A4 0.297 m.
         </p>
+        <p>
+          Para descontar zonas bajo pendiente (altura &lt; 1.50 m) de la NWF:
+          mide esa zona como área y renómbrala con la palabra
+          «descuento» o «pendiente» — se restará automáticamente.
+        </p>
+        <div className="row small" style={{ gap: 12, flexWrap: 'wrap' }}>
+          <b>Pesos de tasación:</b>
+          {['BALKON', 'TERRASSE', 'GARTEN'].map((id) => (
+            <label key={id} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              {{ BALKON: 'Balcón', TERRASSE: 'Terraza', GARTEN: 'Jardín' }[id]}
+              <input
+                type="number" min="0" max="1" step="0.05"
+                value={Number((weights[id] ?? 0).toFixed(2))}
+                onChange={(e) => setWeights((prev) => ({ ...prev, [id]: Math.min(1, Math.max(0, parseFloat(e.target.value) || 0)) }))}
+                style={{ width: 58 }}
+                title="Fracción del área que computa en la superficie ponderada (varía por cantón/tasador)"
+              />
+            </label>
+          ))}
+        </div>
       </details>
 
       <p className="hint app360-note">
@@ -348,6 +386,16 @@ export default function App360() {
       <footer className="app360-foot">
         ¿Mediciones de terreno con drone? → <a href="../">Workpulse Drohne 🚁</a>
       </footer>
+
+      {showAssembly && (
+        <PlanAssembly
+          store={store}
+          roomNames={roomNames}
+          roomTypes={roomTypes}
+          unitSys={unitSys}
+          onClose={() => setShowAssembly(false)}
+        />
+      )}
     </div>
   )
 }

@@ -28,6 +28,13 @@ del dispositivo.
   referencias de calibración suizas (puerta 2.10 m, encimera 0.90 m, SIA 358)
 - 🖨️ Plano imprimible a **escala 1:50 / 1:100** (convención SIA 400) ·
   📸 captura PNG del visor con mediciones
+- 🧱 **Modo pared**: define una pared con 2 puntos de su base y mide sobre el
+  plano vertical (anchos/altos de ventanas, huecos, diagonales)
+- 📝 **Notas ancladas** en la foto 360 (defectos, materiales, recordatorios)
+- 🧩 **Plano general**: ensambla todas las habitaciones en un plano de
+  conjunto — arrastra y rota cada una, con cotas y export SVG/PNG
+- ⚖️ Pesos de tasación configurables (balcón/terraza/jardín) y **descuento
+  NWF** automático de áreas marcadas como «descuento/pendiente» (h &lt; 1.50 m)
 
 ## Desarrollo
 

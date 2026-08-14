@@ -101,3 +101,37 @@ export function snapToAngle(prev, p, refBearing = 0, stepDeg = 45, tolDeg = 6) {
 export function bearingOf(a, b) {
   return Math.atan2(b.z - a.z, b.x - a.x)
 }
+
+/**
+ * Plano vertical de una pared definida por dos puntos de su base en el suelo
+ * (modelo de HoloBuilder): normal horizontal + distancia al origen.
+ * @returns {{nx:number,nz:number,c:number}|null}
+ */
+export function wallPlaneFromPoints(a, b) {
+  const dx = b.x - a.x
+  const dz = b.z - a.z
+  const len = Math.hypot(dx, dz)
+  if (len < 1e-6) return null
+  // Normal horizontal perpendicular a la base (el plano contiene la vertical).
+  const nx = -dz / len
+  const nz = dx / len
+  return { nx, nz, c: nx * a.x + nz * a.z }
+}
+
+/**
+ * Intersección de un rayo desde la cámara con el plano vertical de la pared.
+ * Devuelve el punto 3D {x,y,z} (y relativo a la cámara) o null si el rayo no
+ * corta el plano por delante de la cámara.
+ */
+export function wallPointFromDirection(dir, plane) {
+  const denom = plane.nx * dir.x + plane.nz * dir.z
+  if (Math.abs(denom) < 1e-6) return null
+  const t = plane.c / denom
+  if (t <= 0) return null
+  return { x: dir.x * t, y: dir.y * t, z: dir.z * t }
+}
+
+/** Distancia euclídea 3D entre dos puntos de la pared. */
+export function dist3D(p1, p2) {
+  return Math.hypot(p2.x - p1.x, p2.y - p1.y, p2.z - p1.z)
+}

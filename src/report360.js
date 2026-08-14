@@ -19,6 +19,7 @@ const esc = (s) =>
 export function openSessionReport(store, roomNames = {}, opts = {}) {
   const u = opts.unitSys ?? 'm'
   const roomTypes = opts.roomTypes ?? {}
+  const weights = opts.weights ?? {}
   const rooms = Object.entries(store).filter(([, ms]) => ms.length > 0)
   if (!rooms.length) return false
 
@@ -40,8 +41,11 @@ export function openSessionReport(store, roomNames = {}, opts = {}) {
     const camHs = [...new Set(ms.map((m) => m.camHeight).filter(Boolean).map((h) => h.toFixed(2)))]
 
     const rows = ms.map((m) => {
-      const tipo = { distance: '📏 Distancia', path: '📐 Ruta', area: '⬛ Área', height: '📊 Altura' }[m.mode] ?? m.mode
-      return `<tr><td>${esc(m.label)}</td><td>${tipo}</td><td>${fmtValue(m, u)}</td>` +
+      const tipo = {
+        distance: '📏 Distancia', path: '📐 Ruta', area: '⬛ Área',
+        height: '📊 Altura', wall: '🧱 Pared', note: '📝 Nota',
+      }[m.mode] ?? m.mode
+      return `<tr><td>${esc(m.label)}</td><td>${tipo}</td><td>${esc(fmtValue(m, u))}</td>` +
         `<td>${m.perimeter ? fmtLength(m.perimeter, u) : '—'}</td></tr>`
     }).join('')
 
@@ -81,19 +85,24 @@ export function openSessionReport(store, roomNames = {}, opts = {}) {
   }).join('')
 
   // Desglose de superficies según SIA 416 + NWF + superficie ponderada.
-  const bd = sia416Breakdown(store, roomTypes)
+  const bd = sia416Breakdown(store, roomTypes, weights)
+  const wOf = (t) => weights[t.id] ?? t.weight
   const bdRows = SIA416_TYPES
     .filter((t) => bd.byType[t.id] > 0)
     .map((t) => {
       const a = bd.byType[t.id]
-      const w = t.weight > 0 && t.weight < 1 ? ` × ${t.weight.toFixed(2)} = ${fmtArea(a * t.weight, u)}` : ''
+      const w = wOf(t) > 0 && wOf(t) < 1 ? ` × ${wOf(t).toFixed(2)} = ${fmtArea(a * wOf(t), u)}` : ''
       return `<tr><td>${esc(t.label)}</td><td>${fmtArea(a, u)}${w}</td></tr>`
     }).join('')
+  const wLabel = ['BALKON', 'TERRASSE', 'GARTEN']
+    .map((id) => `${{ BALKON: 'balcón', TERRASSE: 'terraza', GARTEN: 'jardín' }[id]} ×${(weights[id] ?? SIA416_TYPES.find((t) => t.id === id).weight).toFixed(2)}`)
+    .join(' · ')
   const siaBlock = bd.total > 0 ? `
   <h2>Desglose de superficies (SIA 416)</h2>
   <table>${bdRows}
+    ${bd.deducted > 0 ? `<tr><td>− Descuento por zonas con altura &lt; 1.50 m (regla WBS)</td><td>− ${fmtArea(bd.deducted, u)}</td></tr>` : ''}
     <tr class="sum"><td><b>NWF — superficie habitable neta (práctica WBS)</b></td><td><b>${fmtArea(bd.nwf, u)}</b></td></tr>
-    <tr class="sum"><td><b>Superficie ponderada de tasación</b> <small>(balcón ×0.5 · terraza ×⅓ · jardín ×0.1)</small></td><td><b>${fmtArea(bd.weighted, u)}</b></td></tr>
+    <tr class="sum"><td><b>Superficie ponderada de tasación</b> <small>(${wLabel})</small></td><td><b>${fmtArea(bd.weighted, u)}</b></td></tr>
   </table>
   <p class="method">Clasificación según SIA 416 (HNF = uso principal, NNF = anexos, VF = circulación,
   FF = técnica; balcones/terrazas son AGF y no forman parte de la superficie de piso). La NWF sigue la

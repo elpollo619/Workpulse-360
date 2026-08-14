@@ -61,6 +61,8 @@ export const CH_REFERENCES = [
 /** Palabras clave para detectar el tipo de una medición por su etiqueta. */
 const DOOR_WORDS = /puerta|t(ü|u)r|porte|door/i
 const CORRIDOR_WORDS = /pasillo|korridor|flur|couloir|corridor/i
+/** Áreas de descuento NWF: zona bajo pendiente con altura < 1.50 m. */
+export const DEDUCT_WORDS = /descuento|<\s*1[.,]5|pendiente|schr(ä|a)ge|mansarde|abzug/i
 
 /**
  * Evalúa las mediciones de una habitación contra las normas y devuelve
@@ -82,7 +84,7 @@ export function evaluateChecks(ms) {
         })
       }
     }
-    if (m.mode === 'distance') {
+    if (m.mode === 'distance' || m.mode === 'wall') {
       if (DOOR_WORDS.test(m.label ?? '')) {
         out.push(m.value >= SIA500.doorClearWidth
           ? { level: 'ok', text: `${m.label} = ${m.value.toFixed(2)} m: cumple el paso libre mínimo de puerta SIA 500 (≥ 0.80 m).` }
@@ -98,26 +100,36 @@ export function evaluateChecks(ms) {
 }
 
 /**
- * Desglose SIA 416 de la sesión: superficies por categoría, NWF y
- * superficie ponderada de tasación.
+ * Desglose SIA 416 de la sesión: superficies por categoría, NWF (con
+ * descuentos por zonas bajo pendiente < 1.50 m) y superficie ponderada.
+ * Un área cuya etiqueta contiene "descuento", "<1.5", "pendiente" o
+ * "Schräge" se RESTA de la NWF en vez de sumarse (regla WBS).
  * @param {{[photo:string]: Array}} store
  * @param {{[photo:string]: string}} roomTypes  tipo SIA por foto
- * @returns {{byType: Object, nwf: number, weighted: number, total: number}}
+ * @param {{[id:string]: number}} weights       pesos por tipo (opcional)
+ * @returns {{byType: Object, nwf: number, deducted: number, weighted: number, total: number}}
  */
-export function sia416Breakdown(store, roomTypes = {}) {
+export function sia416Breakdown(store, roomTypes = {}, weights = {}) {
   const byType = {}
   let nwf = 0
+  let deducted = 0
   let weighted = 0
   let total = 0
   for (const [photo, ms] of Object.entries(store)) {
-    const area = ms.filter((m) => m.mode === 'area').reduce((s, m) => s + m.value, 0)
-    if (area <= 0) continue
+    const areas = ms.filter((m) => m.mode === 'area')
+    const deductArea = areas.filter((m) => DEDUCT_WORDS.test(m.label ?? '')).reduce((s, m) => s + m.value, 0)
+    const grossArea = areas.filter((m) => !DEDUCT_WORDS.test(m.label ?? '')).reduce((s, m) => s + m.value, 0)
+    if (grossArea <= 0 && deductArea <= 0) continue
     const typeId = roomTypes[photo] ?? DEFAULT_TYPE
     const type = SIA416_TYPES.find((t) => t.id === typeId) ?? SIA416_TYPES[0]
-    byType[type.id] = (byType[type.id] ?? 0) + area
-    if (type.nwf) nwf += area
-    weighted += area * type.weight
-    total += area
+    const w = weights[type.id] ?? type.weight
+    byType[type.id] = (byType[type.id] ?? 0) + grossArea
+    if (type.nwf) {
+      nwf += Math.max(0, grossArea - deductArea)
+      deducted += Math.min(deductArea, grossArea)
+    }
+    weighted += Math.max(0, grossArea - (type.nwf ? deductArea : 0)) * w
+    total += grossArea
   }
-  return { byType, nwf, weighted, total }
+  return { byType, nwf, deducted, weighted, total }
 }

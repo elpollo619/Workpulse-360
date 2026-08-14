@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import {
   floorPointFromDirection, floorDistance, floorPathLength,
   floorPolygonArea, objectHeight, solveCameraHeight, snapToAngle, bearingOf,
+  wallPlaneFromPoints, wallPointFromDirection, dist3D,
 } from './pano.js'
 import { UNIT_SYSTEMS, fmtLength, fmtArea, fmtValue } from './units.js'
 
@@ -11,6 +12,8 @@ const MODES = [
   { id: 'distance', label: '📏 Distancia', hint: 'Toca dos puntos del SUELO' },
   { id: 'path', label: '📐 Ruta / Área', hint: 'Encadena puntos del suelo; toca el 1º punto o ⬛ para cerrar' },
   { id: 'height', label: '📊 Altura', hint: 'Toca el PIE del objeto (en el suelo) y luego su parte ALTA' },
+  { id: 'wall', label: '🧱 Pared', hint: 'Toca 2 puntos de la BASE de la pared (en el suelo); después mide pares de puntos SOBRE esa pared (ventanas, huecos, diagonales)' },
+  { id: 'note', label: '📝 Nota', hint: 'Toca cualquier punto para anclar una nota (defecto, material, recordatorio…)' },
   { id: 'calibrate', label: '🎯 Calibrar', hint: 'Toca 2 puntos del suelo con distancia CONOCIDA (p. ej. una baldosa o un metro plegable)' },
   { id: 'calibv', label: '🚪 Puerta', hint: 'Calibrar con altura conocida: toca el PIE y el TOPE de una puerta (CH ≈ 2.10 m; stock antiguo 2.00) u otra referencia' },
 ]
@@ -102,6 +105,7 @@ export default function Pano360View({
   const gyroRef = useRef({ enabled: false, alpha: 0, beta: 0, gamma: 0, orient: 0, seen: false })
   const measurementsRef = useRef(measurements)
   const unitRef = useRef(unitSys)
+  const keepMsgRef = useRef(false)
 
   useEffect(() => { tapsRef.current = taps }, [taps])
   useEffect(() => { orthoRef.current = ortho }, [ortho])
@@ -120,7 +124,7 @@ export default function Pano360View({
   }, [mode])
 
   function nextLabel(m) {
-    const prefix = m === 'distance' ? 'D' : m === 'path' ? 'A' : 'H'
+    const prefix = { distance: 'D', path: 'A', height: 'H', wall: 'W', note: 'N' }[m] ?? 'M'
     const n = measurementsRef.current.filter((x) => x.label?.startsWith(prefix)).length + 1
     return `${prefix}${n}`
   }
@@ -252,6 +256,47 @@ export default function Pano360View({
       .catch(() => {})
   }
 
+  function saveWallDistance(baseA, baseB, p1, p2) {
+    const value = dist3D(p1, p2)
+    onSave?.({
+      id: crypto.randomUUID(),
+      mode: 'wall',
+      label: nextLabel('wall'),
+      value,
+      unit: 'm',
+      points: [p1, p2],
+      base: [baseA.fp, baseB.fp],
+      dirs: [p1, p2].map((p) => {
+        const n = Math.hypot(p.x, p.y, p.z) || 1
+        return { x: p.x / n, y: p.y / n, z: p.z / n }
+      }),
+      camHeight: camHeightRef.current,
+    })
+    setMessage(`🧱 Guardado: ${fmtLength(value, unitRef.current)} sobre la pared. Sigue midiendo en la misma pared o cambia de modo.`)
+    // La base de la pared se conserva para encadenar más medidas; se salta el
+    // siguiente mensaje automático para no tapar el "Guardado".
+    keepMsgRef.current = true
+    setTaps((prev) => prev.slice(0, 2))
+  }
+
+  function saveNote(dir) {
+    const text = prompt('Texto de la nota (defecto, material, recordatorio…):')
+    if (!text?.trim()) { setTaps([]); return }
+    onSave?.({
+      id: crypto.randomUUID(),
+      mode: 'note',
+      label: nextLabel('note'),
+      value: 0,
+      unit: 'nota',
+      text: text.trim(),
+      points: [],
+      dirs: [dir],
+      camHeight: camHeightRef.current,
+    })
+    setMessage('📝 Nota anclada')
+    setTaps([])
+  }
+
   function undo() {
     if (tapsRef.current.length > 0) {
       setTaps((p) => p.slice(0, -1))
@@ -263,7 +308,10 @@ export default function Pano360View({
     }
   }
 
-  apiRef.current = { saveDistance, saveHeight, savePath, calibrateWith, calibrateVerticalWith, undo }
+  apiRef.current = {
+    saveDistance, saveHeight, savePath, calibrateWith, calibrateVerticalWith,
+    saveWallDistance, saveNote, undo,
+  }
 
   // Atajos de teclado: Ctrl+Z deshacer, Escape cancelar, Enter cerrar área.
   useEffect(() => {
@@ -466,6 +514,24 @@ export default function Pano360View({
           if (snapped !== fp) tap = tapFromFloorPoint(snapped, h)
         }
         setTaps([...prev, tap])
+      } else if (m === 'wall') {
+        if (prev.length < 2) {
+          // Las dos primeras marcas definen la base de la pared en el suelo.
+          if (!fp) { setMessage('⚠️ La base de la pared debe estar en el suelo.'); return }
+          setTaps([...prev, tap])
+        } else {
+          const plane = wallPlaneFromPoints(prev[0].fp, prev[1].fp)
+          const wp = plane && wallPointFromDirection(dir, plane)
+          if (!wp) { setMessage('⚠️ Ese rayo no corta el plano de la pared. Apunta hacia la pared definida.'); return }
+          const wallTap = { dir: tap.dir, wp }
+          if (prev.length === 3) {
+            apiRef.current.saveWallDistance(prev[0], prev[1], prev[2].wp, wp)
+          } else {
+            setTaps([...prev, wallTap])
+          }
+        }
+      } else if (m === 'note') {
+        apiRef.current.saveNote(tap.dir)
       } else {
         // height / calibración vertical: pie en el suelo + tope a plomada
         if (prev.length === 0) {
@@ -598,7 +664,19 @@ export default function Pano360View({
           const y = -camH + (topY + camH) * (i / 12)
           linePts.push(new THREE.Vector3(p.x, y, p.z).normalize().multiplyScalar(48))
         }
-      } else if ((mm.points?.length ?? 0) >= 2) {
+      } else if (mm.mode === 'wall' && (mm.points?.length ?? 0) >= 2) {
+        // Segmento 3D sobre la pared: interpolar y reproyectar a la esfera.
+        const [p1, p2] = mm.points
+        linePts = []
+        for (let i = 0; i <= 16; i++) {
+          const t = i / 16
+          linePts.push(new THREE.Vector3(
+            p1.x + (p2.x - p1.x) * t,
+            p1.y + (p2.y - p1.y) * t,
+            p1.z + (p2.z - p1.z) * t
+          ).normalize().multiplyScalar(48))
+        }
+      } else if (mm.mode !== 'note' && (mm.points?.length ?? 0) >= 2) {
         const seq = mm.closed ? [...mm.points, mm.points[0]] : mm.points
         linePts = []
         for (let i = 1; i < seq.length; i++) linePts.push(...segmentArc(seq[i - 1], seq[i], camH))
@@ -615,7 +693,10 @@ export default function Pano360View({
       const labelAnchors = linePts?.length ? linePts : anchors
       if (labelAnchors.length >= 1) {
         const mid = labelAnchors[Math.floor(labelAnchors.length / 2)].clone()
-        const sprite = makeLabelSprite(`${mm.label} · ${fmtValue(mm, unitSys)}`, colorHex)
+        const text = mm.mode === 'note'
+          ? `📝 ${(mm.text ?? '').slice(0, 28)}${(mm.text ?? '').length > 28 ? '…' : ''}`
+          : `${mm.label} · ${fmtValue(mm, unitSys)}`
+        const sprite = makeLabelSprite(text, colorHex)
         sprite.position.copy(mid.normalize().multiplyScalar(44))
         savedGroup.add(sprite)
       }
@@ -652,6 +733,7 @@ export default function Pano360View({
     }
 
     if (taps.length === 0) return
+    if (keepMsgRef.current) { keepMsgRef.current = false; return }
     const floorPts = taps.filter((t) => t.fp).map((t) => t.fp)
     const u = unitSys
     if ((mode === 'distance' || mode === 'calibrate') && floorPts.length === 1) {
@@ -664,6 +746,10 @@ export default function Pano360View({
     } else if ((mode === 'height' || mode === 'calibv') && taps.length === 1) {
       const far = floorPts[0].horizontal > 8 ? ' ⚠️ punto muy lejano, precisión baja' : ''
       setMessage(`📍 Pie a ${fmtLength(floorPts[0].horizontal, u)}. Ahora toca la parte ALTA (se ajusta a plomada).${far}`)
+    } else if (mode === 'wall') {
+      if (taps.length === 1) setMessage('🧱 Toca el SEGUNDO punto de la base de la pared (en el suelo).')
+      else if (taps.length === 2) setMessage(`🧱 Pared definida (base ${fmtLength(floorDistance(taps[0].fp, taps[1].fp), u)}). Toca 2 puntos SOBRE la pared para medir.`)
+      else if (taps.length === 3) setMessage('🧱 Toca el segundo punto sobre la pared (ancho, alto o diagonal del hueco).')
     }
   }, [taps, mode, unitSys])
 
@@ -731,7 +817,7 @@ export default function Pano360View({
                 </span>
                 <span className="val" style={{ cursor: 'copy' }} title="Clic para copiar el valor"
                   onClick={() => copyValue(mm)}>
-                  {fmtValue(mm, unitSys)}
+                  {mm.mode === 'note' ? `📝 ${(mm.text ?? '').slice(0, 22)}` : fmtValue(mm, unitSys)}
                   {mm.mode === 'area' && mm.perimeter ? ` · per. ${fmtLength(mm.perimeter, unitSys, 1)}` : ''}
                 </span>
                 <button className="del" onClick={() => onDelete?.(mm.id)}>✕</button>
