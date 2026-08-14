@@ -21,6 +21,13 @@ del dispositivo.
   export **SVG, PNG y DXF (CAD, con capa de cotas)**
 - 🖨️ Informe imprimible/PDF con **superficie, perímetro, paredes y volumen**
   por habitación (quantity takeoff) y método auditable · 📄 CSV
+- 🇨🇭 **Normas suizas**: clasificación **SIA 416** (HNF/NNF/VF/FF, balcón,
+  terraza) con desglose de **NWF** y superficie ponderada de tasación;
+  comprobaciones **SIA 500** (puerta ≥ 0.80 m, pasillo ≥ 1.20 m), avisos de
+  altura de techo (≈ 2.40 m PBG ZH) y regla de 1.50 m bajo pendientes;
+  referencias de calibración suizas (puerta 2.10 m, encimera 0.90 m, SIA 358)
+- 🖨️ Plano imprimible a **escala 1:50 / 1:100** (convención SIA 400) ·
+  📸 captura PNG del visor con mediciones
 
 ## Desarrollo
 

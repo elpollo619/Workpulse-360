@@ -4,11 +4,13 @@ import FloorPlan from './FloorPlan.jsx'
 import { openSessionReport } from './report360.js'
 import { savePhoto, listPhotos, deletePhoto } from './photostore.js'
 import { fmtArea } from './units.js'
+import { SIA416_TYPES, DEFAULT_TYPE } from './sia.js'
 
 const STORE_KEY = 'workpulse360.measurements.v1'
 const NAMES_KEY = 'workpulse360.roomnames.v1'
 const HEIGHTS_KEY = 'workpulse360.camheights.v1'
 const UNITS_KEY = 'workpulse360.units.v1'
+const TYPES_KEY = 'workpulse360.roomtypes.v1'
 
 function loadJSON(key) {
   try {
@@ -29,6 +31,7 @@ export default function App360() {
   const [store, setStore] = useState(() => loadJSON(STORE_KEY)) // { [photoName]: measurements[] }
   const [roomNames, setRoomNames] = useState(() => loadJSON(NAMES_KEY)) // { [photoName]: 'Salón' }
   const [camHeights, setCamHeights] = useState(() => loadJSON(HEIGHTS_KEY)) // { [photoName]: 1.6 }
+  const [roomTypes, setRoomTypes] = useState(() => loadJSON(TYPES_KEY)) // { [photoName]: 'HNF' }
   const [unitSys, setUnitSys] = useState(() => localStorage.getItem(UNITS_KEY) || 'm')
   const [showPlan, setShowPlan] = useState(false)
   const [restoring, setRestoring] = useState(true)
@@ -47,6 +50,9 @@ export default function App360() {
   useEffect(() => {
     localStorage.setItem(UNITS_KEY, unitSys)
   }, [unitSys])
+  useEffect(() => {
+    localStorage.setItem(TYPES_KEY, JSON.stringify(roomTypes))
+  }, [roomTypes])
 
   // Restaurar las fotos guardadas en IndexedDB (la sesión sobrevive recargas).
   useEffect(() => {
@@ -133,12 +139,12 @@ export default function App360() {
   }
 
   function exportCSV() {
-    const rows = [['foto', 'espacio', 'etiqueta', 'tipo', 'valor', 'unidad', 'perimetro_m', 'altura_camara_m']]
+    const rows = [['foto', 'espacio', 'tipo_sia416', 'etiqueta', 'tipo', 'valor', 'unidad', 'perimetro_m', 'altura_camara_m']]
     for (const [photo, ms] of Object.entries(store)) {
       for (const m of ms) {
         rows.push([
-          photo, roomNames[photo] ?? '', m.label, m.mode, m.value.toFixed(3), m.unit,
-          m.perimeter?.toFixed(3) ?? '', m.camHeight?.toFixed(2) ?? '',
+          photo, roomNames[photo] ?? '', roomTypes[photo] ?? DEFAULT_TYPE, m.label, m.mode,
+          m.value.toFixed(3), m.unit, m.perimeter?.toFixed(3) ?? '', m.camHeight?.toFixed(2) ?? '',
         ])
       }
     }
@@ -152,7 +158,7 @@ export default function App360() {
       app: 'workpulse360',
       version: 1,
       exportedAt: new Date().toISOString(),
-      store, roomNames, camHeights, unitSys,
+      store, roomNames, camHeights, roomTypes, unitSys,
     }
     const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' })
     trigger(blob, 'proyecto-workpulse360.json')
@@ -168,6 +174,7 @@ export default function App360() {
       setStore((prev) => ({ ...prev, ...data.store }))
       setRoomNames((prev) => ({ ...prev, ...data.roomNames }))
       setCamHeights((prev) => ({ ...prev, ...data.camHeights }))
+      setRoomTypes((prev) => ({ ...prev, ...data.roomTypes }))
       if (data.unitSys) setUnitSys(data.unitSys)
       alert(`Proyecto importado: ${Object.keys(data.store).length} espacio(s). Abre las fotos con el mismo nombre para ver las mediciones.`)
     }).catch(() => alert('Ese archivo no parece un proyecto de Workpulse 360.'))
@@ -216,6 +223,15 @@ export default function App360() {
               <button onClick={() => renameRoom(active.name)} title="Nombrar este espacio">
                 🏷️ {roomNames[active.name] || 'nombrar'}
               </button>
+              <select
+                value={roomTypes[active.name] ?? DEFAULT_TYPE}
+                onChange={(e) => setRoomTypes((prev) => ({ ...prev, [active.name]: e.target.value }))}
+                title="Tipo de superficie según SIA 416 (para el desglose del informe)"
+              >
+                {SIA416_TYPES.map((t) => (
+                  <option key={t.id} value={t.id}>{t.label}</option>
+                ))}
+              </select>
             </>
           }
         />
@@ -258,6 +274,7 @@ export default function App360() {
               <li key={p.name}>
                 <span className="mrow" onClick={() => setActiveName(p.name)} style={{ cursor: 'pointer', flex: 1 }}>
                   🖼️ {roomNames[p.name] || p.name} · {(store[p.name] ?? []).length} mediciones
+                  {' · '}{(SIA416_TYPES.find((t) => t.id === (roomTypes[p.name] ?? DEFAULT_TYPE)) ?? SIA416_TYPES[0]).short}
                 </span>
                 <button className="del" title="Eliminar foto y mediciones" onClick={() => removePhoto(p.name)}>✕</button>
               </li>
@@ -300,13 +317,28 @@ export default function App360() {
         {totalMeasurements > 0 && (
           <>
             <button onClick={exportCSV}>📄 CSV ({totalMeasurements})</button>
-            <button onClick={() => openSessionReport(store, roomNames, { unitSys })}>🖨️ Informe de sesión</button>
+            <button onClick={() => openSessionReport(store, roomNames, { unitSys, roomTypes })}>🖨️ Informe de sesión</button>
             <button onClick={exportProject} title="Descarga las mediciones como archivo de proyecto">💾 Proyecto</button>
           </>
         )}
         <button onClick={() => importRef.current?.click()} title="Cargar un proyecto exportado antes">📂 Importar proyecto</button>
         <input ref={importRef} type="file" accept="application/json,.json" hidden onChange={importProject} />
       </div>
+
+      <details className="app360-step">
+        <summary><b>🇨🇭 Normas y referencias suizas integradas</b></summary>
+        <p>
+          Cada espacio se clasifica según <b>SIA 416</b> (HNF/NNF/VF/FF, balcón,
+          terraza) y el informe desglosa <b>NWF</b> (superficie habitable neta,
+          práctica WBS) y la <b>superficie ponderada</b> de tasación (balcón ×0.5,
+          terraza ×⅓, jardín ×0.1). Se comprueban además: paso libre de puerta
+          ≥ 0.80 m y pasillo ≥ 1.20 m (<b>SIA 500</b>), altura habitable ≈ 2.40 m
+          (PBG ZH, varía por cantón) y la regla de 1.50 m bajo pendientes.
+          Referencias de calibración suizas: puerta 2.10 m (stock antiguo 2.00),
+          encimera 0.90 m (norma de cocina suiza), interruptor ≈ 1.05 m,
+          barandilla 0.90–1.00 m (SIA 358), hoja A4 0.297 m.
+        </p>
+      </details>
 
       <p className="hint app360-note">
         Todo se procesa en tu dispositivo — las fotos no se suben a ningún

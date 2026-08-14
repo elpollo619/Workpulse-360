@@ -6,6 +6,7 @@
 
 import { buildPlanSVG } from './plansvg.js'
 import { fmtLength, fmtArea, fmtVolume, fmtValue } from './units.js'
+import { SIA416_TYPES, DEFAULT_TYPE, sia416Breakdown, evaluateChecks } from './sia.js'
 
 const esc = (s) =>
   String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))
@@ -13,10 +14,11 @@ const esc = (s) =>
 /**
  * @param {{[photo:string]: Array}} store        mediciones por foto
  * @param {{[photo:string]: string}} roomNames   nombre de habitación por foto
- * @param {{unitSys?: string}} opts
+ * @param {{unitSys?: string, roomTypes?: Object}} opts
  */
 export function openSessionReport(store, roomNames = {}, opts = {}) {
   const u = opts.unitSys ?? 'm'
+  const roomTypes = opts.roomTypes ?? {}
   const rooms = Object.entries(store).filter(([, ms]) => ms.length > 0)
   if (!rooms.length) return false
 
@@ -58,16 +60,45 @@ export function openSessionReport(store, roomNames = {}, opts = {}) {
     const plan = ms.some((m) => (m.points?.length ?? 0) >= 2)
       ? buildPlanSVG(ms, { title: name, dark: false, unitSys: u })
       : ''
+    const typeId = roomTypes[photo] ?? DEFAULT_TYPE
+    const type = SIA416_TYPES.find((t) => t.id === typeId) ?? SIA416_TYPES[0]
+    const checks = evaluateChecks(ms)
+    const checksHTML = checks.length
+      ? `<ul class="checks">${checks.map((c) =>
+          `<li class="${c.level}">${{ ok: '✅', warn: '⚠️', fail: '❌' }[c.level]} ${esc(c.text)}</li>`
+        ).join('')}</ul>`
+      : ''
     return `
       <section>
-        <h2>${esc(name)}${roomArea > 0 ? ` — ${fmtArea(roomArea, u)}` : ''}</h2>
+        <h2>${esc(name)} <span class="siatype">${esc(type.short)}</span>${roomArea > 0 ? ` — ${fmtArea(roomArea, u)}` : ''}</h2>
         ${stats.length ? `<div class="stats">${stats.join(' · ')}</div>` : ''}
         <table><tr><th>Etiqueta</th><th>Tipo</th><th>Valor</th><th>Perímetro</th></tr>${rows}</table>
+        ${checksHTML}
         ${plan ? `<div class="plan">${plan}</div>` : ''}
         <p class="method">Método: proyección al plano del suelo con cámara a ${camHs.length ? camHs.join(' / ') : '?'} m.
         Las superficies de pared no descuentan puertas ni ventanas.</p>
       </section>`
   }).join('')
+
+  // Desglose de superficies según SIA 416 + NWF + superficie ponderada.
+  const bd = sia416Breakdown(store, roomTypes)
+  const bdRows = SIA416_TYPES
+    .filter((t) => bd.byType[t.id] > 0)
+    .map((t) => {
+      const a = bd.byType[t.id]
+      const w = t.weight > 0 && t.weight < 1 ? ` × ${t.weight.toFixed(2)} = ${fmtArea(a * t.weight, u)}` : ''
+      return `<tr><td>${esc(t.label)}</td><td>${fmtArea(a, u)}${w}</td></tr>`
+    }).join('')
+  const siaBlock = bd.total > 0 ? `
+  <h2>Desglose de superficies (SIA 416)</h2>
+  <table>${bdRows}
+    <tr class="sum"><td><b>NWF — superficie habitable neta (práctica WBS)</b></td><td><b>${fmtArea(bd.nwf, u)}</b></td></tr>
+    <tr class="sum"><td><b>Superficie ponderada de tasación</b> <small>(balcón ×0.5 · terraza ×⅓ · jardín ×0.1)</small></td><td><b>${fmtArea(bd.weighted, u)}</b></td></tr>
+  </table>
+  <p class="method">Clasificación según SIA 416 (HNF = uso principal, NNF = anexos, VF = circulación,
+  FF = técnica; balcones/terrazas son AGF y no forman parte de la superficie de piso). La NWF sigue la
+  práctica WBS: superficies interiores acabadas, de pared a pared; bajo pendientes solo computa la zona
+  con altura ≥ 1.50 m. Indica siempre el método al publicar un anuncio.</p>` : ''
 
   const html = `<!doctype html>
 <html lang="es"><head><meta charset="utf-8"><title>Informe 360 — Workpulse</title>
@@ -85,13 +116,22 @@ export function openSessionReport(store, roomNames = {}, opts = {}) {
   .plan { max-width: 560px; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; }
   .plan svg { display: block; width: 100%; height: auto; }
   .method { color: #888; font-size: 11px; margin: 6px 0 0; }
+  .siatype { font-size: 11px; background: #e8eef4; border: 1px solid #c8d4de; border-radius: 10px;
+             padding: 1px 8px; vertical-align: middle; color: #456; }
+  .checks { list-style: none; padding: 0; margin: 4px 0 10px; font-size: 12.5px; }
+  .checks li { padding: 3px 0; }
+  .checks li.fail { color: #b3261e; }
+  .checks li.warn { color: #8a6d00; }
+  .checks li.ok { color: #1b6e46; }
+  tr.sum td { border-top: 2px solid #999; }
   footer { margin-top: 36px; color: #999; font-size: 11px; }
   section { break-inside: avoid; }
   @media print { body { margin: 12mm; } }
 </style></head><body>
 <h1>Workpulse 360 — Informe de medición</h1>
 <div class="sub">Generado: ${new Date().toLocaleString('es-CH')} · ${rooms.length} espacio(s)</div>
-${totalArea > 0 ? `<div class="total"><b>Superficie total medida: ${fmtArea(totalArea, u)}</b>${totalVolume > 0 ? ` · Volumen total: ${fmtVolume(totalVolume, u)}` : ''}</div>` : ''}
+${totalArea > 0 ? `<div class="total"><b>Superficie total medida: ${fmtArea(totalArea, u)}</b>${totalVolume > 0 ? ` · Volumen total (tipo GV: GF × altura): ${fmtVolume(totalVolume, u)}` : ''}</div>` : ''}
+${siaBlock}
 ${sections}
 <footer>Medidas por trigonometría sobre foto 360° equirectangular con altura de cámara conocida o calibrada
 (proyección al plano del suelo; alturas por pie/tope a plomada). Válido en suelos planos; la exactitud

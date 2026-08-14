@@ -12,7 +12,7 @@ const MODES = [
   { id: 'path', label: '📐 Ruta / Área', hint: 'Encadena puntos del suelo; toca el 1º punto o ⬛ para cerrar' },
   { id: 'height', label: '📊 Altura', hint: 'Toca el PIE del objeto (en el suelo) y luego su parte ALTA' },
   { id: 'calibrate', label: '🎯 Calibrar', hint: 'Toca 2 puntos del suelo con distancia CONOCIDA (p. ej. una baldosa o un metro plegable)' },
-  { id: 'calibv', label: '🚪 Puerta', hint: 'Calibrar con altura conocida: toca el PIE y el TOPE de una puerta (≈ 2.03 m) u otro objeto' },
+  { id: 'calibv', label: '🚪 Puerta', hint: 'Calibrar con altura conocida: toca el PIE y el TOPE de una puerta (CH ≈ 2.10 m; stock antiguo 2.00) u otra referencia' },
 ]
 
 /** Color de confianza según la distancia horizontal del punto (modelo de error). */
@@ -162,7 +162,8 @@ export default function Pano360View({
     applyCalibration(
       measured,
       `Distancia medida ahora: ${measured.toFixed(2)} m con cámara a ${camHeightRef.current.toFixed(2)} m.\n` +
-      '¿Cuál es la distancia REAL entre esos dos puntos, en metros?'
+      '¿Cuál es la distancia REAL entre esos dos puntos, en metros?\n' +
+      'Referencias: hoja A4 = 0.297 · baldosa habitual 0.30 / 0.60 · módulo de cocina suizo 0.55'
     )
   }
 
@@ -176,8 +177,10 @@ export default function Pano360View({
     applyCalibration(
       measured,
       `Altura medida ahora: ${measured.toFixed(2)} m.\n` +
-      '¿Cuál es la altura REAL del objeto, en metros? (puerta estándar ≈ 2.03)',
-      '2.03'
+      '¿Cuál es la altura REAL del objeto, en metros?\n' +
+      'Referencias CH: puerta 2.10 (stock antiguo 2.00) · encimera 0.90 · ' +
+      'interruptor ≈ 1.05 · barandilla 0.90–1.00 (SIA 358)',
+      '2.10'
     )
   }
 
