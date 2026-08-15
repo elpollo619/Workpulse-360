@@ -8,6 +8,7 @@ import {
 } from './pano.js'
 import { UNIT_SYSTEMS, fmtLength, fmtArea, fmtValue } from './units.js'
 import { laserSupported, connectLaser } from './laser.js'
+import { getAIKey, setAIKey, analyzePhoto } from './ai.js'
 
 const MODES = [
   { id: 'distance', label: '📏 Distancia', hint: 'Toca dos puntos del SUELO' },
@@ -103,7 +104,7 @@ function tapFromFloorPoint(fp, h) {
 export default function Pano360View({
   imageURL, measurements = [], onSave, onDelete, onRename, onOpenPlan, onClose,
   extraControls, initialCamHeight = 1.6, onCamHeight, unitSys = 'm', onUnitSys,
-  initialLevel = { pitch: 0, roll: 0 }, onLevel, calibrated = false,
+  initialLevel = { pitch: 0, roll: 0 }, onLevel, calibrated = false, onAIResult,
 }) {
   const mountRef = useRef(null)
   const stateRef = useRef({})
@@ -436,6 +437,43 @@ export default function Pano360View({
     })
     setMessage('📝 Nota anclada')
     setTaps([])
+  }
+
+  // Análisis con IA (clave propia): nombra la sala, sugiere tipo SIA y anota.
+  const [aiBusy, setAiBusy] = useState(false)
+  async function runAI() {
+    let key = getAIKey()
+    if (!key) {
+      key = prompt(
+        '🤖 Análisis automático con IA (opcional).\n\n' +
+        'Pega tu clave API de OpenAI (sk-…) o de Anthropic (sk-ant-…).\n' +
+        'Se guarda solo en este dispositivo. AVISO: al usar esta función, una ' +
+        'copia reducida de la foto se envía al proveedor de IA — es lo único ' +
+        'de la app que sale de tu dispositivo.'
+      )?.trim()
+      if (!key) return
+      setAIKey(key)
+    }
+    setAiBusy(true)
+    setMessage('🤖 Analizando la foto…')
+    try {
+      const r = await analyzePhoto(imageURL, key)
+      onAIResult?.(r)
+      const parts = []
+      if (r.nombre) parts.push(`espacio «${r.nombre}»`)
+      if (r.tipo) parts.push(`tipo ${r.tipo}`)
+      if (r.observaciones?.length) parts.push(`${r.observaciones.length} observación(es) anotada(s)`)
+      setMessage(parts.length ? `🤖 Aplicado: ${parts.join(' · ')}.` : '🤖 La IA no devolvió datos útiles.')
+    } catch (e) {
+      if (String(e).includes('401') || String(e).includes('403')) {
+        setAIKey('')
+        setMessage('⚠️ Clave API rechazada — se ha borrado. Vuelve a intentarlo con una clave válida.')
+      } else {
+        setMessage('⚠️ El análisis con IA falló (¿conexión? ¿saldo de la clave?).')
+      }
+    } finally {
+      setAiBusy(false)
+    }
   }
 
   // Cierra el asistente dejando al usuario listo para su primera medida.
@@ -1093,6 +1131,10 @@ export default function Pano360View({
           <button className={levelOpen ? 'active' : ''} onClick={() => setLevelOpen((v) => !v)}
             title="Nivelación fina: corrige la inclinación de la foto (clave para la precisión)">🎚️</button>
           <button onClick={screenshot} title="Descargar captura PNG de la vista con las mediciones">📸</button>
+          <button onClick={runAI} disabled={aiBusy}
+            title="IA (clave propia OpenAI/Anthropic): nombra la sala, sugiere el tipo SIA y anota observaciones automáticamente">
+            {aiBusy ? '🤖…' : '🤖'}
+          </button>
           {laserSupported() && (
             <button className={laser ? 'active' : ''} onClick={toggleLaser}
               title="Conectar un láser Bluetooth (Bosch GLM o Workpulse DIY). Su lectura se usa al calibrar.">

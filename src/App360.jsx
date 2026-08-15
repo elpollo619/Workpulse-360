@@ -4,6 +4,7 @@ import FloorPlan from './FloorPlan.jsx'
 import PlanAssembly from './PlanAssembly.jsx'
 import StereoMode from './StereoMode.jsx'
 import LiveMode from './LiveMode.jsx'
+import Dollhouse3D from './Dollhouse3D.jsx'
 import { openSessionReport, downloadSessionReport, getSessionReportHTML } from './report360.js'
 import { savePhoto, listPhotos, deletePhoto } from './photostore.js'
 import { fmtArea } from './units.js'
@@ -50,6 +51,7 @@ export default function App360() {
   const [showAssembly, setShowAssembly] = useState(false)
   const [showStereo, setShowStereo] = useState(false)
   const [showLive, setShowLive] = useState(false)
+  const [showDollhouse, setShowDollhouse] = useState(false)
   const [restoring, setRestoring] = useState(true)
   const importRef = useRef(null)
 
@@ -353,6 +355,32 @@ export default function App360() {
           onClose={() => setActiveName(null)}
           initialCamHeight={camHeights[active.name] ?? 1.6}
           calibrated={camHeights[active.name] != null}
+          onAIResult={(r) => {
+            const photo = active.name
+            if (r.nombre && !roomNames[photo]) {
+              setRoomNames((prev) => ({ ...prev, [photo]: r.nombre }))
+            }
+            if (r.tipo && SIA416_TYPES.some((t) => t.id === r.tipo)) {
+              setRoomTypes((prev) => ({ ...prev, [photo]: r.tipo }))
+            }
+            for (const obs of (r.observaciones ?? []).slice(0, 3)) {
+              if (typeof obs !== 'string' || !obs.trim()) continue
+              setStore((prev) => ({
+                ...prev,
+                [photo]: [...(prev[photo] ?? []), {
+                  id: crypto.randomUUID(),
+                  mode: 'note',
+                  label: `IA${(prev[photo] ?? []).filter((m) => m.label?.startsWith('IA')).length + 1}`,
+                  value: 0,
+                  unit: 'nota',
+                  text: `🤖 ${obs.trim()}`,
+                  points: [],
+                  dirs: [],
+                }],
+              }))
+            }
+            appendAudit('ia', `${photo} · análisis automático (${r.nombre ?? '—'} / ${r.tipo ?? '—'})`)
+          }}
           onCamHeight={(h) => setCamHeights((prev) => (prev[active.name] === h ? prev : { ...prev, [active.name]: h }))}
           unitSys={unitSys}
           onUnitSys={setUnitSys}
@@ -495,6 +523,12 @@ export default function App360() {
                 🧩 Plano general
               </button>
             )}
+            {roomsWithOutline > 0 && (
+              <button onClick={() => setShowDollhouse(true)}
+                title="La casa en 3D: habitaciones extruidas a su altura medida, según el plano general">
+                🏠 Dollhouse 3D
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -596,6 +630,9 @@ export default function App360() {
             appendAudit('capturar', `${name} desde cámara en vivo`)
           }}
         />
+      )}
+      {showDollhouse && (
+        <Dollhouse3D store={store} roomNames={roomNames} onClose={() => setShowDollhouse(false)} />
       )}
       {showStereo && (
         <StereoMode
