@@ -2,7 +2,7 @@
 // visor de plano, el informe y el export PNG. La cámara está en el origen y
 // las posiciones vienen de la trigonometría sobre el plano del suelo.
 
-import { MEASURE_COLORS } from './Pano360View.jsx'
+import { MEASURE_COLORS, MARKER_TYPES } from './Pano360View.jsx'
 import { fmtLength, fmtArea } from './units.js'
 
 export function planGeometry(measurements, W = 640, H = 480, PAD = 40) {
@@ -54,6 +54,21 @@ export function buildPlanSVG(measurements, opts = {}) {
   measurements.forEach((m, idx) => {
     const color = MEASURE_COLORS[idx % MEASURE_COLORS.length]
     const pts = m.points ?? []
+    if (m.mode === 'marker') {
+      // Símbolo de instalación (enchufe, interruptor…) como en los planos
+      // eléctricos: círculo con letra + etiqueta.
+      const p = pts[0]
+      if (!p) return
+      const type = MARKER_TYPES.find((t) => t.id === m.text) ?? { sym: '?', label: m.text }
+      const x = geo.sx(p.x)
+      const y = geo.sy(p.z)
+      parts.push(
+        `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="7" fill="${bg}" stroke="#2a7de1" stroke-width="1.6"/>`,
+        `<text x="${x.toFixed(1)}" y="${(y + 3.4).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="#2a7de1">${escapeXML(type.sym)}</text>`,
+        `<text x="${(x + 10).toFixed(1)}" y="${(y - 6).toFixed(1)}" font-size="9" fill="${dimC}">${escapeXML(m.label)}</text>`
+      )
+      return
+    }
     if (m.mode === 'height') {
       const p = pts[0]
       if (!p) return
@@ -100,12 +115,44 @@ export function buildPlanSVG(measurements, opts = {}) {
         )
       }
     }
+    // Ángulos interiores en las esquinas del polígono cerrado; en rojo si se
+    // desvían de 90° (como los planos de aufmaß electro: 80°, 179°…).
+    if (m.closed && pts.length >= 3) {
+      for (let i = 0; i < pts.length; i++) {
+        const v = pts[i]
+        const a = pts[(i - 1 + pts.length) % pts.length]
+        const b = pts[(i + 1) % pts.length]
+        const v1 = { x: a.x - v.x, z: a.z - v.z }
+        const v2 = { x: b.x - v.x, z: b.z - v.z }
+        const l1 = Math.hypot(v1.x, v1.z)
+        const l2 = Math.hypot(v2.x, v2.z)
+        if (l1 < 0.1 || l2 < 0.1) continue
+        const dot = (v1.x * v2.x + v1.z * v2.z) / (l1 * l2)
+        const ang = Math.acos(Math.max(-1, Math.min(1, dot))) * 180 / Math.PI
+        const off90 = Math.abs(ang - 90) > 3 && Math.abs(ang - 180) > 3
+        // Etiqueta desplazada hacia el interior (bisectriz).
+        const bx = (v1.x / l1 + v2.x / l2)
+        const bz = (v1.z / l1 + v2.z / l2)
+        const bl = Math.hypot(bx, bz) || 1
+        const lx = geo.sx(v.x) + (bx / bl) * 16
+        const lz = geo.sy(v.z) - (bz / bl) * 16
+        parts.push(
+          `<text x="${lx.toFixed(1)}" y="${lz.toFixed(1)}" text-anchor="middle" font-size="8.5" fill="${off90 ? '#d33' : dimC}"${off90 ? ' font-weight="700"' : ''}>${ang.toFixed(0)}°</text>`
+        )
+      }
+    }
     const valText = m.unit === '°'
       ? `${m.value.toFixed(1)}°`
       : m.unit === 'm²' ? fmtArea(m.value, unitSys) : fmtLength(m.value, unitSys)
     parts.push(
       `<text x="${cx.toFixed(1)}" y="${cz.toFixed(1)}" text-anchor="middle" font-size="12" font-weight="600" fill="${color}">${escapeXML(m.label)}: ${valText}</text>`
     )
+    // Perímetro (U =) bajo la etiqueta del área, como los planos de aufmaß.
+    if (m.closed && m.perimeter) {
+      parts.push(
+        `<text x="${cx.toFixed(1)}" y="${(cz + 13).toFixed(1)}" text-anchor="middle" font-size="10" fill="${dimC}">U = ${fmtLength(m.perimeter, unitSys)}</text>`
+      )
+    }
   })
 
   // Barra de escala (abajo a la izquierda).

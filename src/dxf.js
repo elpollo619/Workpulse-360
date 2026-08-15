@@ -36,6 +36,14 @@ export function buildDXF(measurements, roomName = 'HABITACION') {
 
   for (const m of measurements) {
     const pts = (m.points ?? []).map((p) => ({ x: p.x, y: -p.z }))
+    if (m.mode === 'marker') {
+      // Elementos de instalación en su propia capa (círculo + etiqueta).
+      const p = pts[0]
+      if (!p) continue
+      rows.push('0', 'CIRCLE', '8', 'ELEMENTOS', '10', num(p.x), '20', num(p.y), '40', '0.08')
+      rows.push(...text(p.x + 0.12, p.y, 0.12, `${m.label} ${m.text ?? ''}`, 'ELEMENTOS'))
+      continue
+    }
     if (m.mode === 'height') {
       const p = pts[0]
       if (!p) continue

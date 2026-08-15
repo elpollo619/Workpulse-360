@@ -16,8 +16,20 @@ const MODES = [
   { id: 'wall', label: '🧱 Pared', hint: 'Toca 2 puntos de la BASE de la pared (en el suelo); después mide pares de puntos SOBRE esa pared (ventanas, huecos, diagonales)' },
   { id: 'slope', label: '⛰️ Pendiente', hint: 'Ángulo de techo inclinado: PIE y TOPE del punto BAJO, luego PIE y TOPE del punto ALTO' },
   { id: 'note', label: '📝 Nota', hint: 'Toca cualquier punto para anclar una nota (defecto, material, recordatorio…)' },
+  { id: 'marker', label: '🔌 Elemento', hint: 'Instalación eléctrica: elige el tipo y toca el SUELO justo bajo el elemento — aparecerá en el plano con su posición' },
   { id: 'calibrate', label: '🎯 Calibrar', hint: 'Toca 2 puntos del suelo con distancia CONOCIDA (p. ej. una baldosa o un metro plegable)' },
   { id: 'calibv', label: '🚪 Puerta', hint: 'Calibrar con altura conocida: toca el PIE y el TOPE de una puerta (CH ≈ 2.10 m; stock antiguo 2.00) u otra referencia' },
+]
+
+/** Tipos de elemento de instalación (planificación eléctrica, estilo immersight). */
+export const MARKER_TYPES = [
+  { id: 'enchufe', label: '🔌 Enchufe', sym: 'E' },
+  { id: 'interruptor', label: '💡 Interruptor', sym: 'I' },
+  { id: 'luminaria', label: '🔆 Luminaria', sym: 'L' },
+  { id: 'caja', label: '📦 Caja de derivación', sym: 'C' },
+  { id: 'red', label: '🌐 Toma de red/TV', sym: 'R' },
+  { id: 'radiador', label: '🔥 Radiador', sym: 'H' },
+  { id: 'sanitario', label: '🚰 Sanitario', sym: 'S' },
 ]
 
 /** Color de confianza según la distancia horizontal del punto (modelo de error). */
@@ -108,6 +120,8 @@ export default function Pano360View({
   const measurementsRef = useRef(measurements)
   const unitRef = useRef(unitSys)
   const keepMsgRef = useRef(false)
+  const [markerType, setMarkerType] = useState('enchufe')
+  const markerTypeRef = useRef('enchufe')
   const [laser, setLaser] = useState(null) // {disconnect}
   const [laserReading, setLaserReading] = useState(null) // metros
   const laserRef = useRef({ value: null, at: 0 })
@@ -115,6 +129,7 @@ export default function Pano360View({
   useEffect(() => { tapsRef.current = taps }, [taps])
   useEffect(() => { orthoRef.current = ortho }, [ortho])
   useEffect(() => { unitRef.current = unitSys }, [unitSys])
+  useEffect(() => { markerTypeRef.current = markerType }, [markerType])
 
   // El listener de clic se registra una sola vez; esta ref le da siempre las
   // funciones de guardado del render actual (evita cierres obsoletos).
@@ -129,7 +144,7 @@ export default function Pano360View({
   }, [mode])
 
   function nextLabel(m) {
-    const prefix = { distance: 'D', path: 'A', height: 'H', wall: 'W', note: 'N' }[m] ?? 'M'
+    const prefix = { distance: 'D', path: 'A', height: 'H', wall: 'W', note: 'N', slope: 'P', marker: 'E' }[m] ?? 'M'
     const n = measurementsRef.current.filter((x) => x.label?.startsWith(prefix)).length + 1
     return `${prefix}${n}`
   }
@@ -344,6 +359,23 @@ export default function Pano360View({
     setTaps([])
   }
 
+  function saveMarker(tap) {
+    const type = MARKER_TYPES.find((t) => t.id === markerTypeRef.current) ?? MARKER_TYPES[0]
+    onSave?.({
+      id: crypto.randomUUID(),
+      mode: 'marker',
+      label: nextLabel('marker'),
+      value: 0,
+      unit: '',
+      text: type.id,
+      points: [tap.fp],
+      dirs: [tap.dir],
+      camHeight: camHeightRef.current,
+    })
+    setMessage(`${type.label} colocado a ${fmtLength(tap.fp.horizontal, unitRef.current)} de la cámara. Sigue colocando o cambia de modo.`)
+    setTaps([])
+  }
+
   function saveNote(dir) {
     const text = prompt('Texto de la nota (defecto, material, recordatorio…):')
     if (!text?.trim()) { setTaps([]); return }
@@ -375,7 +407,7 @@ export default function Pano360View({
 
   apiRef.current = {
     saveDistance, saveHeight, savePath, calibrateWith, calibrateVerticalWith,
-    saveWallDistance, saveNote, saveSlope, undo,
+    saveWallDistance, saveNote, saveSlope, saveMarker, undo,
   }
 
   // El láser se desconecta al cerrar el visor.
@@ -613,6 +645,9 @@ export default function Pano360View({
         }
       } else if (m === 'note') {
         apiRef.current.saveNote(tap.dir)
+      } else if (m === 'marker') {
+        if (!fp) { setMessage('⚠️ Toca el SUELO justo bajo el elemento (su vertical).'); return }
+        apiRef.current.saveMarker(tap)
       } else {
         // height / calibración vertical: pie en el suelo + tope a plomada
         if (prev.length === 0) {
@@ -774,9 +809,14 @@ export default function Pano360View({
       const labelAnchors = linePts?.length ? linePts : anchors
       if (labelAnchors.length >= 1) {
         const mid = labelAnchors[Math.floor(labelAnchors.length / 2)].clone()
+        const markerT = mm.mode === 'marker'
+          ? (MARKER_TYPES.find((t) => t.id === mm.text) ?? MARKER_TYPES[0])
+          : null
         const text = mm.mode === 'note'
           ? `📝 ${(mm.text ?? '').slice(0, 28)}${(mm.text ?? '').length > 28 ? '…' : ''}`
-          : `${mm.label} · ${fmtValue(mm, unitSys)}`
+          : markerT
+            ? markerT.label
+            : `${mm.label} · ${fmtValue(mm, unitSys)}`
         const sprite = makeLabelSprite(text, colorHex)
         sprite.position.copy(mid.normalize().multiplyScalar(44))
         savedGroup.add(sprite)
@@ -872,6 +912,12 @@ export default function Pano360View({
             ⟂
           </button>
         )}
+        {mode === 'marker' && (
+          <select value={markerType} onChange={(e) => setMarkerType(e.target.value)}
+            title="Tipo de elemento a colocar">
+            {MARKER_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+          </select>
+        )}
         {mode === 'path' && taps.length > 0 && (
           <>
             {taps.length >= 3 && <button onClick={() => savePath(true)}>⬛ Área</button>}
@@ -911,7 +957,9 @@ export default function Pano360View({
                 </span>
                 <span className="val" style={{ cursor: 'copy' }} title="Clic para copiar el valor"
                   onClick={() => copyValue(mm)}>
-                  {mm.mode === 'note' ? `📝 ${(mm.text ?? '').slice(0, 22)}` : fmtValue(mm, unitSys)}
+                  {mm.mode === 'note' ? `📝 ${(mm.text ?? '').slice(0, 22)}`
+                    : mm.mode === 'marker' ? (MARKER_TYPES.find((t) => t.id === mm.text)?.label ?? mm.text)
+                    : fmtValue(mm, unitSys)}
                   {mm.mode === 'area' && mm.perimeter ? ` · per. ${fmtLength(mm.perimeter, unitSys, 1)}` : ''}
                 </span>
                 <button className="del" onClick={() => onDelete?.(mm.id)}>✕</button>

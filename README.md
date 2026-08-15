@@ -42,6 +42,11 @@ del dispositivo.
 - 🔗 **Medidor láser por Bluetooth** (Web Bluetooth): conecta el láser DIY
   de la carpeta [`hardware/`](hardware/) y su lectura se propone sola al
   calibrar (Chrome/Edge)
+- 🔌 **Planificación eléctrica**: coloca enchufes, interruptores,
+  luminarias, cajas y tomas sobre la foto — aparecen como símbolos en el
+  plano y el DXF (capa ELEMENTOS) con recuento por habitación en el informe
+- 📐 Plano con **ángulos de esquina** (en rojo si no son de 90°) y
+  **perímetro (U =)** por habitación, estilo aufmaß profesional
 
 ## Desarrollo
 

@@ -44,6 +44,7 @@ export function openSessionReport(store, roomNames = {}, opts = {}) {
       const tipo = {
         distance: '📏 Distancia', path: '📐 Ruta', area: '⬛ Área',
         height: '📊 Altura', wall: '🧱 Pared', note: '📝 Nota',
+        slope: '⛰️ Pendiente', marker: '🔌 Elemento',
       }[m.mode] ?? m.mode
       return `<tr><td>${esc(m.label)}</td><td>${tipo}</td><td>${esc(fmtValue(m, u))}</td>` +
         `<td>${m.perimeter ? fmtLength(m.perimeter, u) : '—'}</td></tr>`
@@ -59,6 +60,13 @@ export function openSessionReport(store, roomNames = {}, opts = {}) {
     if (wallArea != null) {
       const paintL = ((wallArea + roomArea) * 2) / 10
       stats.push(`Pintura orient.: <b>${paintL.toFixed(1)} L</b> <small>(2 manos, paredes+techo)</small>`)
+    }
+    // Recuento de elementos de instalación (quantity takeoff eléctrico).
+    const markers = ms.filter((m) => m.mode === 'marker')
+    if (markers.length) {
+      const byKind = {}
+      for (const m of markers) byKind[m.text] = (byKind[m.text] ?? 0) + 1
+      stats.push(`Elementos: <b>${Object.entries(byKind).map(([k, n]) => `${n}× ${k}`).join(', ')}</b>`)
     }
 
     const plan = ms.some((m) => (m.points?.length ?? 0) >= 2)
