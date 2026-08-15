@@ -1,13 +1,45 @@
+/* ============================================================
+   Workpulse 360 — sistema de diseño
+   Tema oscuro único y deliberado: la app es un visor fotográfico
+   que se usa en obra; el fondo pizarra mantiene el foco en la
+   panorámica y hereda la identidad de la familia Workpulse
+   (esmeralda #34d399 sobre pizarra azulada).
+   ============================================================ */
+
 :root {
-  --bg: #0f1418;
-  --panel: #171f26;
-  --panel-2: #1f2a33;
-  --line: #2a3742;
-  --text: #e6edf3;
-  --muted: #8b9aa7;
-  --accent: #34d399;
-  --accent-2: #1f8f6a;
+  /* Superficies (de fondo a elevado) */
+  --bg0: #0b1014;
+  --bg1: #131b23;
+  --bg2: #1c2732;
+  --bg3: #253240;
+  --line: #273543;
+  --line-2: #33455a;
+
+  /* Texto */
+  --text: #e9eff5;
+  --muted: #93a3b1;
+
+  /* Marca Workpulse */
+  --brand: #34d399;
+  --brand-press: #1f8f6a;
+  --brand-ink: #052e1f;
+  --brand-soft: rgba(52, 211, 153, 0.12);
+
+  /* Semánticos (independientes del acento) */
+  --ok: #34d399;
+  --warn: #f5b04b;
   --danger: #f87171;
+  --info: #58a6f2;
+
+  /* Forma y sombra */
+  --r-s: 8px;
+  --r-m: 12px;
+  --r-l: 16px;
+  --shadow-1: 0 2px 10px rgba(0, 0, 0, 0.35);
+  --shadow-2: 0 8px 28px rgba(0, 0, 0, 0.5);
+
+  /* Barra flotante translúcida */
+  --glass: rgba(15, 21, 27, 0.88);
 }
 
 * { box-sizing: border-box; }
@@ -20,452 +52,226 @@ html, body, #root {
 body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--text);
-  background: var(--bg);
+  background: var(--bg0);
+  -webkit-font-smoothing: antialiased;
 }
 
-.app {
-  display: flex;
-  height: 100%;
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
 }
 
-/* ---------- Sidebar ---------- */
-.sidebar {
-  width: 320px;
-  min-width: 320px;
-  background: var(--panel);
-  border-right: 1px solid var(--line);
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  padding: 14px;
-  gap: 14px;
-}
+/* ---------- Controles base ---------- */
 
-.brand h1 {
-  font-size: 20px;
-  margin: 0;
-  letter-spacing: -0.3px;
-}
-.brand h1 span {
-  color: var(--accent);
-  margin-left: 4px;
-}
-.brand p {
-  margin: 2px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.block {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.block.grow { flex: 1; }
-
-.block-label {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--muted);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.row.small {
-  font-size: 12px;
-  color: var(--muted);
-  justify-content: space-between;
-}
-.row select { flex: 1; }
-
-select, input[type="text"] {
-  background: var(--panel-2);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px;
+button,
+select,
+input[type='number'],
+input[type='text'] {
+  font: inherit;
   font-size: 13px;
+  color: var(--text);
+  background: var(--bg2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  padding: 7px 11px;
+  min-height: 34px;
 }
 
 button {
-  background: var(--panel-2);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 13px;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.12s, border-color 0.12s, transform 0.06s;
 }
-button:hover { background: #26333d; }
-
-.filebtn {
-  background: var(--panel-2);
-  border: 1px dashed var(--line);
-  border-radius: 8px;
-  padding: 10px;
-  font-size: 13px;
-  cursor: pointer;
-  text-align: center;
-  transition: border-color 0.15s;
-}
-.filebtn:hover { border-color: var(--accent); }
-a.applink {
-  display: block;
-  color: var(--text);
-  text-decoration: none;
+button:hover { background: var(--bg3); border-color: var(--line-2); }
+button:active { transform: translateY(1px); }
+button:disabled { opacity: 0.45; cursor: default; transform: none; }
+button.active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--brand-ink);
+  font-weight: 600;
 }
 
-.tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: var(--r-s);
 }
-.tool { flex: 1 1 auto; }
-.tool.active {
-  background: var(--accent-2);
-  border-color: var(--accent);
-  color: #fff;
+
+.val, .pano360-msg, input[type='number'] { font-variant-numeric: tabular-nums; }
+
+.del {
+  background: transparent;
+  border: none;
+  min-height: 0;
+  color: var(--muted);
+  padding: 2px 6px;
 }
+.del:hover { background: transparent; color: var(--danger); }
 
 .hint {
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.55;
   color: var(--muted);
   margin: 2px 0 0;
 }
 
-.mini {
-  padding: 2px 8px;
-  font-size: 11px;
-}
+.row { display: flex; gap: 8px; align-items: center; }
+.row.small { font-size: 12px; color: var(--muted); flex-wrap: wrap; }
 
-.list {
-  list-style: none;
-  margin: 0 0 6px;
-  padding: 0;
+/* ============================================================
+   Pantalla de inicio
+   ============================================================ */
+
+.app360-landing {
+  min-height: 100%;
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 56px 22px 36px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 26px;
 }
-.list li {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 6px 8px;
-  font-size: 12px;
+
+.brand h1 {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
 }
-.list li.muted {
-  background: transparent;
-  border: none;
+.brand h1 span { color: var(--brand); margin-left: 5px; }
+.brand p {
+  margin: 6px 0 0;
+  font-size: 15px;
   color: var(--muted);
-  padding: 2px 0;
 }
-.mrow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.del {
-  background: transparent;
+
+/* CTA principal: la única acción imprescindible */
+.filebtn {
+  display: block;
+  text-align: center;
+  cursor: pointer;
+  border-radius: var(--r-m);
+  transition: filter 0.12s, transform 0.06s;
+}
+.filebtn:active { transform: translateY(1px); }
+.app360-open {
+  background: var(--brand);
+  color: var(--brand-ink);
+  font-size: 17px;
+  font-weight: 650;
+  padding: 18px;
   border: none;
-  color: var(--danger);
-  padding: 0 4px;
+  box-shadow: var(--shadow-1);
 }
-.del:hover { background: transparent; }
+.app360-open:hover { filter: brightness(1.06); }
 
-.export .tools button { flex: 1; }
-
-/* ---------- Stage / mapa ---------- */
-.stage {
-  position: relative;
-  flex: 1;
+/* Sesión actual: tarjetas de espacios */
+.app360-rooms { display: flex; flex-direction: column; gap: 10px; }
+.app360-rooms b {
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
 }
-.map {
-  position: absolute;
-  inset: 0;
-}
-/* Barra flotante de dibujo (deshacer punto / terminar / reiniciar) */
-.draw-toolbar {
-  position: absolute;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 6px;
-  z-index: 1100;
-  background: rgba(23, 31, 38, 0.95);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 6px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
-}
-.draw-toolbar button {
-  font-size: 12px;
-  padding: 7px 10px;
-  white-space: nowrap;
-}
-@media (max-width: 767px) {
-  .draw-toolbar {
-    top: auto;
-    bottom: 60px;
-    width: max-content;
-    max-width: calc(100% - 20px);
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-}
-
-.status {
-  position: absolute;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(23, 31, 38, 0.95);
-  border: 1px solid var(--line);
-  padding: 8px 16px;
-  border-radius: 20px;
-  font-size: 13px;
-  z-index: 1000;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-}
-
-/* Ajustes de Leaflet en tema oscuro */
-.leaflet-container { background: #0b0f12; }
-
-/* ---------- Pestañas ---------- */
-.tabs {
-  display: flex;
-  gap: 6px;
-}
-.tabs button {
-  flex: 1;
-  border-radius: 8px 8px 0 0;
-  border-bottom: 2px solid transparent;
-}
-.tabs button.active {
-  background: var(--accent-2);
-  border-color: var(--accent);
-  color: #fff;
-}
-
-/* ---------- Panel de procesamiento ---------- */
-.process-panel {
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.small-text { font-size: 12px; }
-.task-status {
+.list li {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px;
-}
-.progress {
-  height: 6px;
-  background: var(--bg);
-  border-radius: 3px;
-  overflow: hidden;
-}
-.progress > div {
-  height: 100%;
-  background: var(--accent);
-  transition: width 0.4s;
-}
-
-/* ---------- Vista 3D del DSM ---------- */
-.dsm3d {
-  position: absolute;
-  inset: 0;
-  z-index: 1200;
-  display: flex;
-  flex-direction: column;
-  background: #0b0f12;
-}
-.dsm3d-canvas { flex: 1; }
-.dsm3d-bar {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 10px;
-  padding: 8px 14px;
-  background: var(--panel);
-  border-top: 1px solid var(--line);
-  font-size: 13px;
-}
-
-/* ---------- Buscador de lugares ---------- */
-.search-block { position: relative; }
-.search-block input {
-  width: 100%;
-  background: var(--panel-2);
-  color: var(--text);
+  gap: 8px;
+  background: var(--bg1);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 9px 10px;
-  font-size: 13px;
+  border-radius: var(--r-m);
+  padding: 12px 14px;
+  font-size: 14px;
+  transition: border-color 0.12s, background 0.12s;
 }
-.search-results {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  z-index: 50;
+.list li:hover { border-color: var(--brand-press); background: var(--bg2); }
+.mrow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Cómo funciona: secuencia real 1→2→3, numerada con contador */
+.app360-steps {
   list-style: none;
-  margin: 4px 0 0;
-  padding: 4px;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-}
-.search-results li {
-  padding: 7px 8px;
-  font-size: 12px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.search-results li:hover { background: var(--accent-2); color: #fff; }
-
-/* ---------- Perfil de elevación en la lista ---------- */
-.list li.with-chart { align-items: flex-start; }
-.mitem { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
-.profile-chart { width: 100%; height: 44px; display: block; }
-.profile-label { fill: var(--muted); font-size: 9px; font-family: system-ui, sans-serif; }
-
-/* ---------- Panel del plan de vuelo ---------- */
-.plan-panel {
-  background: rgba(167, 139, 250, 0.06);
-  border: 1px solid rgba(167, 139, 250, 0.35);
-  border-radius: 10px;
-  padding: 10px;
-}
-.plan-panel .row.small input[type='range'] { width: 45%; }
-.plan-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 12px;
-  font-size: 12px;
-  color: var(--text);
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px;
-}
-
-/* ---------- Botón GPS del mapa ---------- */
-.locate-btn {
-  display: block;
-  width: 30px;
-  height: 30px;
-  line-height: 30px;
-  text-align: center;
-  background: #fff;
-  font-size: 15px;
-  cursor: pointer;
-  text-decoration: none;
-}
-
-/* ---------- Toggle del panel (móvil y escritorio) ---------- */
-.sidebar-toggle {
-  position: fixed;
-  top: 10px;
-  left: 10px;
-  z-index: 1500;
-  width: 38px;
-  height: 38px;
+  counter-reset: paso;
+  margin: 0;
   padding: 0;
-  font-size: 16px;
-  border-radius: 10px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
-}
-.sidebar.hidden { display: none; }
-
-@media (max-width: 767px) {
-  .sidebar {
-    position: fixed;
-    inset: 0 60px 0 0;
-    z-index: 1400;
-    width: auto;
-    min-width: 0;
-    padding-top: 56px;
-    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
-  }
-}
-@media (min-width: 768px) {
-  .sidebar { padding-top: 54px; }
-}
-
-/* ---------- Editor visual de GCP ---------- */
-.gcp-editor {
-  position: absolute;
-  inset: 0;
-  z-index: 1300;
-  display: flex;
-  background: var(--bg);
-}
-.gcp-side {
-  width: 300px;
-  min-width: 300px;
-  background: var(--panel);
-  border-right: 1px solid var(--line);
-  padding: 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  overflow-y: auto;
 }
-.gcp-side-head {
+.app360-step {
+  counter-increment: paso;
+  position: relative;
+  background: var(--bg1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  padding: 14px 16px 14px 58px;
+  font-size: 13.5px;
+}
+.app360-step::before {
+  content: counter(paso);
+  position: absolute;
+  left: 16px;
+  top: 14px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-weight: 700;
+  font-size: 14px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: center;
 }
-.gcp-active {
-  border-color: var(--accent) !important;
-  background: rgba(52, 211, 153, 0.12) !important;
+.app360-step b { color: var(--text); font-weight: 650; }
+.app360-step p { margin: 4px 0 0; color: var(--muted); line-height: 1.6; }
+
+/* El panel de normas reutiliza la tarjeta, sin número */
+details.app360-step { counter-increment: none; padding-left: 16px; }
+details.app360-step::before { content: none; }
+details.app360-step summary { cursor: pointer; font-size: 13.5px; }
+details.app360-step p { margin-top: 10px; }
+
+/* Herramientas agrupadas con rótulo */
+.toolgroup { display: flex; flex-direction: column; gap: 8px; }
+.toolgroup-label {
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
 }
-.gcp-photos { max-height: 180px; overflow-y: auto; }
-.gcp-canvas-wrap { position: relative; flex: 1; }
-.gcp-canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  touch-action: none;
-  cursor: crosshair;
-}
-.gcp-empty {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+.tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.tools button { flex: 1 1 auto; min-width: 120px; }
+
+.app360-note { font-size: 12px; }
+
+.app360-foot {
+  margin-top: auto;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: 13px;
   text-align: center;
-  line-height: 1.7;
-  pointer-events: none;
 }
-@media (max-width: 767px) {
-  .gcp-editor { flex-direction: column; }
-  .gcp-side {
-    width: auto;
-    min-width: 0;
-    max-height: 45%;
-    border-right: none;
-    border-bottom: 1px solid var(--line);
-  }
-}
+.app360-foot a { color: var(--brand); text-decoration: none; }
+.app360-foot a:hover { text-decoration: underline; }
 
-/* ---------- Visor 360° con medición ---------- */
+/* ============================================================
+   Visor 360
+   ============================================================ */
+
+.app360-stage { position: fixed; inset: 0; }
+.app360-stage .pano360 { position: fixed; }
+
 .pano360 {
   position: absolute;
   inset: 0;
@@ -473,49 +279,82 @@ a.applink {
   background: #000;
 }
 .pano360-canvas { position: absolute; inset: 0; }
+
+/* Barra superior: fila de modos + fila de contexto/utilidades */
 .pano360-top {
   position: absolute;
   top: 10px;
   left: 50%;
   transform: translateX(-50%);
+  max-width: calc(100% - 20px);
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--glass);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--line);
+  border-radius: var(--r-l);
+  padding: 8px;
+  font-size: 12px;
+  box-shadow: var(--shadow-2);
+}
+.tb-row {
+  display: flex;
+  gap: 6px;
   align-items: center;
   flex-wrap: wrap;
   justify-content: center;
-  background: rgba(23, 31, 38, 0.92);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 8px 10px;
-  font-size: 12px;
 }
-.pano360-top label { display: flex; align-items: center; gap: 6px; }
-.pano360-modes { display: flex; gap: 4px; }
+.tb-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 2px;
+  background: var(--line);
+}
+
+/* Modos como control segmentado */
+.pano360-modes {
+  display: flex;
+  gap: 4px;
+  background: var(--bg1);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 3px;
+}
+.pano360-modes button {
+  border: none;
+  background: transparent;
+  min-height: 30px;
+  padding: 5px 10px;
+  border-radius: 7px;
+  white-space: nowrap;
+}
+.pano360-modes button:hover { background: var(--bg3); }
 .pano360-modes button.active {
-  background: var(--accent-2);
-  border-color: var(--accent);
-  color: #fff;
+  background: var(--brand);
+  color: var(--brand-ink);
 }
-.pano360-top input {
-  width: 58px;
-  background: var(--panel-2);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 5px 6px;
-}
+
+.pano360-top label { display: flex; align-items: center; gap: 5px; color: var(--muted); }
+.pano360-top input[type='number'] { width: 60px; min-height: 30px; padding: 4px 6px; }
+.pano360-top select { min-height: 30px; padding: 4px 6px; max-width: 170px; }
+.pano360-top .tb-row button { min-height: 30px; padding: 5px 9px; }
+
+/* Mensaje de estado: la voz de la app */
 .pano360-msg {
   position: absolute;
   bottom: 46px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(23, 31, 38, 0.95);
-  border: 1px solid var(--accent-2);
-  border-radius: 20px;
-  padding: 8px 16px;
+  background: var(--glass);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--brand-press);
+  border-radius: 22px;
+  padding: 9px 18px;
   font-size: 14px;
   max-width: calc(100% - 24px);
   text-align: center;
+  box-shadow: var(--shadow-1);
 }
 .pano360-hint {
   position: absolute;
@@ -525,9 +364,67 @@ a.applink {
   color: var(--muted);
   font-size: 11px;
   white-space: nowrap;
+  max-width: calc(100% - 24px);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Lupa de precisión del visor 360 */
+/* Panel de mediciones */
+.pano360-panel {
+  position: absolute;
+  top: 108px;
+  right: 10px;
+  width: 250px;
+  max-height: calc(100% - 210px);
+  overflow-y: auto;
+  background: var(--glass);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--line);
+  border-radius: var(--r-m);
+  padding: 12px;
+  font-size: 12.5px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: var(--shadow-2);
+}
+.pano360-panel > b {
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.pano360-panel ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.pano360-panel li {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--bg2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  padding: 7px 9px;
+}
+.pano360-panel li.empty {
+  background: none;
+  border: 1px dashed var(--line);
+  color: var(--muted);
+  justify-content: center;
+  padding: 12px;
+}
+.pano360-panel .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.pano360-panel .lbl { font-weight: 650; }
+.pano360-panel .val { margin-left: auto; white-space: nowrap; color: var(--muted); }
+.pano360-panel .val:hover { color: var(--text); }
+
+/* Lupa de precisión */
 .pano360-loupe-frame {
   display: none;
   position: absolute;
@@ -535,10 +432,10 @@ a.applink {
   bottom: 64px;
   width: 150px;
   height: 150px;
-  border: 2px solid var(--accent);
-  border-radius: 8px;
+  border: 2px solid var(--brand);
+  border-radius: var(--r-s);
   pointer-events: none;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-2);
 }
 .pano360-loupe-frame::after {
   content: '';
@@ -549,220 +446,117 @@ a.applink {
   height: 14px;
   transform: translate(-50%, -50%);
   background:
-    linear-gradient(var(--accent), var(--accent)) center/1.5px 100% no-repeat,
-    linear-gradient(var(--accent), var(--accent)) center/100% 1.5px no-repeat;
+    linear-gradient(var(--brand), var(--brand)) center/1.5px 100% no-repeat,
+    linear-gradient(var(--brand), var(--brand)) center/100% 1.5px no-repeat;
 }
 .pano360.loupe-on .pano360-loupe-frame { display: block; }
 
-/* Panel de nivelación fina del visor 360 */
+/* Panel de nivelación fina */
 .pano360-level {
   position: absolute;
-  top: 64px;
+  top: 108px;
   left: 10px;
-  width: 250px;
-  background: rgba(23, 31, 38, 0.94);
+  width: 260px;
+  background: var(--glass);
+  backdrop-filter: blur(8px);
   border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 10px;
-  font-size: 12px;
+  border-radius: var(--r-m);
+  padding: 12px;
+  font-size: 12.5px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 9px;
+  box-shadow: var(--shadow-2);
 }
-.pano360-level label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.pano360-level input[type='range'] { flex: 1; }
-.pano360-level .val {
-  font-variant-numeric: tabular-nums;
-  min-width: 44px;
-  text-align: right;
-}
-
-/* Lectura de coordenadas LV95/WGS84 en vivo */
-.coords-readout {
-  background: rgba(23, 31, 38, 0.92);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 4px 10px;
+.pano360-level > b {
   font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-/* Estilos propios de Workpulse 360 (la base viene de ../src/styles.css). */
-
-.app360-landing {
-  min-height: 100%;
-  max-width: 560px;
-  margin: 0 auto;
-  padding: 48px 20px 32px;
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-}
-
-.app360-landing .brand h1 { font-size: 30px; }
-.app360-landing .brand p { font-size: 14px; }
-
-.app360-open {
-  font-size: 16px;
-  padding: 18px;
-  border-width: 2px;
-}
-
-.app360-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.app360-step {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 14px;
-  font-size: 13px;
-}
-.app360-step b { color: var(--accent); }
-.app360-step p { margin: 6px 0 0; color: var(--text); line-height: 1.55; }
-
-.app360-note { font-size: 12px; line-height: 1.6; }
-
-.app360-foot {
-  margin-top: auto;
-  padding-top: 18px;
-  border-top: 1px solid var(--line);
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   color: var(--muted);
-  font-size: 13px;
-  text-align: center;
 }
-.app360-foot a { color: var(--accent); }
+.pano360-level label { display: flex; align-items: center; gap: 7px; }
+.pano360-level input[type='range'] { flex: 1; accent-color: var(--brand); }
+.pano360-level .val { min-width: 46px; text-align: right; color: var(--muted); }
 
-/* El visor ocupa toda la pantalla en esta app. */
-.app360-stage {
-  position: fixed;
-  inset: 0;
-}
-.app360-stage .pano360 { position: fixed; }
+/* ============================================================
+   Plano de planta y plano general
+   ============================================================ */
 
-.app360-rooms b { font-size: 13px; color: var(--muted); }
-.app360-rooms .list { margin-top: 8px; }
-
-/* Panel de mediciones del visor */
-.pano360-panel {
-  position: absolute;
-  top: 64px;
-  right: 10px;
-  width: 230px;
-  max-height: calc(100% - 160px);
-  overflow-y: auto;
-  background: rgba(23, 31, 38, 0.94);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 10px;
-  font-size: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.pano360-panel ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.pano360-panel li {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 5px 7px;
-}
-.pano360-panel li.empty { background: none; border: none; color: var(--muted); }
-.pano360-panel .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
-.pano360-panel .lbl { font-weight: 600; }
-.pano360-panel .val { margin-left: auto; white-space: nowrap; }
-.pano360-panel .del { background: none; border: none; color: var(--danger); padding: 0 2px; }
-.pano360-top select {
-  background: var(--panel-2);
-  color: var(--text);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 5px;
-  max-width: 150px;
-}
-
-/* Plano de planta */
 .floorplan {
   position: absolute;
   inset: 0;
   z-index: 1400;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(4, 8, 11, 0.78);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 14px;
 }
 .floorplan-card {
-  background: var(--panel);
+  background: var(--bg1);
   border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 14px;
-  max-width: 720px;
+  border-radius: var(--r-l);
+  padding: 16px;
+  max-width: 760px;
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+  box-shadow: var(--shadow-2);
 }
 .floorplan-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 10px;
-  font-size: 13px;
+  font-size: 14px;
+  flex-wrap: wrap;
 }
-.floorplan-svg,
+.floorplan-head button { min-height: 30px; padding: 5px 10px; font-size: 12.5px; }
 .floorplan-svgwrap svg {
   width: 100%;
   height: auto;
-  border-radius: 8px;
+  border-radius: var(--r-s);
   border: 1px solid var(--line);
   display: block;
 }
 
+/* ============================================================
+   Móvil
+   ============================================================ */
+
 @media (max-width: 767px) {
-  .pano360-panel {
-    top: auto;
-    bottom: 96px;
-    right: 8px;
-    width: 180px;
-    max-height: 40%;
-  }
-  /* La barra creció con los modos nuevos: en móvil, los modos van en una
-     fila deslizable y el conjunto se limita en alto con scroll. */
+  .app360-landing { padding-top: 36px; }
+
   .pano360-top {
     top: 6px;
     left: 6px;
     right: 6px;
     transform: none;
     max-width: none;
-    gap: 5px;
     padding: 6px;
-    max-height: 108px;
+    max-height: 118px;
     overflow-y: auto;
   }
   .pano360-modes {
     width: 100%;
     overflow-x: auto;
     flex-wrap: nowrap;
-    padding-bottom: 2px;
+    scrollbar-width: none;
   }
-  .pano360-modes button { white-space: nowrap; flex: none; }
-  .pano360-level { top: 120px; }
+  .pano360-modes::-webkit-scrollbar { display: none; }
+  .pano360-modes button { flex: none; }
+  .tb-row { justify-content: flex-start; }
+
+  .pano360-panel {
+    top: auto;
+    bottom: 96px;
+    right: 8px;
+    width: 200px;
+    max-height: 40%;
+  }
+  .pano360-level { top: 128px; width: 230px; }
+  .pano360-hint { display: none; }
 }

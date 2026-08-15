@@ -363,40 +363,38 @@ export default function App360() {
         <p className="hint">Buscando fotos de sesiones anteriores…</p>
       )}
 
-      <section className="app360-steps">
-        <div className="app360-step">
-          <b>1 · Captura</b>
+      <ol className="app360-steps">
+        <li className="app360-step">
+          <b>Captura</b>
           <p>
-            Coloca la cámara (Insta360, Ricoh Theta…) en un trípode o palo a
+            Coloca la cámara (Insta360, Ricoh Theta…) en un trípode a
             <b> altura conocida</b> — p. ej. 1.60 m — en medio de cada estancia.
-            ¿No la sabes? Usa <b>🎯 Calibrar</b> con una distancia conocida.
+            ¿No la sabes? Dentro del visor, <b>🎯 Calibrar</b> la deduce con una
+            distancia conocida o tu láser Bluetooth.
           </p>
-        </div>
-        <div className="app360-step">
-          <b>2 · Exporta</b>
+        </li>
+        <li className="app360-step">
+          <b>Exporta la foto 360</b>
           <p>
-            Desde la app de la cámara, exporta en formato
-            <b> equirectangular</b> (la imagen 360 completa "desplegada", 2:1).
+            Desde la app de la cámara, en formato <b>equirectangular </b>
+            (la imagen completa «desplegada», proporción 2:1).
           </p>
-        </div>
-        <div className="app360-step">
-          <b>3 · Mide</b>
+        </li>
+        <li className="app360-step">
+          <b>Mide y entrega</b>
           <p>
-            <b>📏 distancias</b>, <b>📐 áreas</b> y <b>📊 alturas</b> con lupa de
-            precisión y snapping ortogonal. Todo se guarda en tu dispositivo
-            (fotos incluidas), genera el <b>🗺️ plano de planta</b> con cotas y
-            exporta a <b>CSV, SVG, PNG, DXF y PDF</b>.
+            Distancias, áreas, alturas, paredes y elementos eléctricos con lupa
+            de precisión. Todo queda en tu dispositivo y sale como <b>plano con
+            cotas</b>, informe SIA y archivos <b>CSV, SVG, PNG, DXF o PDF</b>.
           </p>
-        </div>
-      </section>
+        </li>
+      </ol>
 
-      <div className="tools">
-        {totalMeasurements > 0 && (
-          <>
-            <button onClick={exportCSV}>📄 CSV ({totalMeasurements})</button>
-            <button onClick={() => openSessionReport(store, roomNames, { unitSys, roomTypes, weights })}>🖨️ Informe de sesión</button>
-            <button onClick={exportProject} title="Descarga las mediciones como archivo de proyecto">💾 Proyecto</button>
-            <button onClick={exportBackup} title="Copia de seguridad completa: fotos + mediciones en un ZIP">🗄️ Copia completa</button>
+      {totalMeasurements > 0 && (
+        <div className="toolgroup">
+          <span className="toolgroup-label">Planos e informes</span>
+          <div className="tools">
+            <button onClick={() => openSessionReport(store, roomNames, { unitSys, roomTypes, weights })}>🖨️ Informe (PDF)</button>
             <button onClick={() => downloadSessionReport(store, roomNames, { unitSys, roomTypes, weights })}
               title="Informe como archivo HTML autónomo (se abre en cualquier navegador)">📑 Informe HTML</button>
             {roomsWithOutline > 0 && (
@@ -405,10 +403,22 @@ export default function App360() {
                 🧩 Plano general
               </button>
             )}
-          </>
-        )}
-        <button onClick={() => importRef.current?.click()} title="Cargar un proyecto exportado antes">📂 Importar proyecto</button>
-        <input ref={importRef} type="file" accept=".json,.zip,application/json,application/zip" hidden onChange={importProject} />
+          </div>
+        </div>
+      )}
+      <div className="toolgroup">
+        <span className="toolgroup-label">Datos y copias</span>
+        <div className="tools">
+          {totalMeasurements > 0 && (
+            <>
+              <button onClick={exportCSV}>📄 CSV ({totalMeasurements})</button>
+              <button onClick={exportProject} title="Descarga las mediciones como archivo de proyecto">💾 Proyecto</button>
+              <button onClick={exportBackup} title="Copia de seguridad completa: fotos + mediciones en un ZIP">🗄️ Copia completa</button>
+            </>
+          )}
+          <button onClick={() => importRef.current?.click()} title="Cargar un proyecto o copia completa (.json / .zip)">📂 Importar</button>
+          <input ref={importRef} type="file" accept=".json,.zip,application/json,application/zip" hidden onChange={importProject} />
+        </div>
       </div>
 
       <details className="app360-step">

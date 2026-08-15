@@ -81,7 +81,7 @@ function makeLabelSprite(text, color) {
   const tex = new THREE.CanvasTexture(canvas)
   tex.colorSpace = THREE.SRGBColorSpace
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }))
-  const scale = 4.2
+  const scale = 3.2
   sprite.scale.set((w / h) * scale, scale, 1)
   return sprite
 }
@@ -945,59 +945,67 @@ export default function Pano360View({
       <div className="pano360-loupe-frame" aria-hidden />
 
       <div className="pano360-top">
-        {extraControls}
-        <div className="pano360-modes">
-          {MODES.map((m) => (
-            <button key={m.id} className={mode === m.id ? 'active' : ''} onClick={() => setMode(m.id)}
-              title={m.hint}>
-              {m.label}
-            </button>
-          ))}
+        <div className="tb-row">
+          <div className="pano360-modes">
+            {MODES.map((m) => (
+              <button key={m.id} className={mode === m.id ? 'active' : ''} onClick={() => setMode(m.id)}
+                title={m.hint}>
+                {m.label}
+              </button>
+            ))}
+          </div>
         </div>
-        <label title="Altura de la cámara sobre el suelo (m). Usa 🎯 Calibrar si no la conoces con exactitud.">
-          📷
-          <input
-            type="number" min="0.3" max="5" step="0.1" value={camHeight}
-            onChange={(e) => setCamHeight(parseFloat(e.target.value) || 1.6)}
-          /> m
-        </label>
-        <select value={unitSys} onChange={(e) => onUnitSys?.(e.target.value)} title="Unidades">
-          {UNIT_SYSTEMS.map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}
-        </select>
-        {mode === 'path' && (
-          <button className={ortho ? 'active' : ''} onClick={() => setOrtho((v) => !v)}
-            title="Snapping ortogonal: ajusta los tramos a ángulos de 45°/90°">
-            ⟂
-          </button>
-        )}
-        {mode === 'marker' && (
-          <select value={markerType} onChange={(e) => setMarkerType(e.target.value)}
-            title="Tipo de elemento a colocar">
-            {MARKER_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+        <div className="tb-row">
+          {extraControls}
+          <span className="tb-sep" aria-hidden />
+          <label title="Altura de la cámara sobre el suelo (m). Usa 🎯 Calibrar si no la conoces con exactitud.">
+            📷
+            <input
+              type="number" min="0.3" max="5" step="0.1" value={camHeight}
+              onChange={(e) => setCamHeight(parseFloat(e.target.value) || 1.6)}
+            /> m
+          </label>
+          <select value={unitSys} onChange={(e) => onUnitSys?.(e.target.value)} title="Unidades">
+            {UNIT_SYSTEMS.map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}
           </select>
-        )}
-        {mode === 'path' && taps.length > 0 && (
-          <>
-            {taps.length >= 3 && <button onClick={() => savePath(true)}>⬛ Área</button>}
-            {taps.length >= 2 && <button onClick={() => savePath(false)}>💾 Ruta</button>}
-          </>
-        )}
-        <button onClick={undo} title="Deshacer último punto o medición (Ctrl+Z)">↩️</button>
-        <button onClick={() => { setTaps([]); setMessage(MODES.find((m) => m.id === mode)?.hint ?? '') }}
-          title="Cancelar puntos en curso">🗑️</button>
-        <button className={gyro ? 'active' : ''} onClick={toggleGyro}
-          title="Giroscopio: mirar moviendo el teléfono">🧭</button>
-        <button className={levelOpen ? 'active' : ''} onClick={() => setLevelOpen((v) => !v)}
-          title="Nivelación fina: corrige la inclinación de la foto (clave para la precisión)">🎚️</button>
-        <button onClick={screenshot} title="Descargar captura PNG de la vista con las mediciones">📸</button>
-        {laserSupported() && (
-          <button className={laser ? 'active' : ''} onClick={toggleLaser}
-            title="Conectar el medidor láser Workpulse (Bluetooth). Su lectura se usa al calibrar.">
-            🔗{laserReading != null ? ` ${laserReading.toFixed(2)} m` : ''}
-          </button>
-        )}
-        <button onClick={() => setPanelOpen((v) => !v)}>📋</button>
-        <button onClick={onClose}>✕</button>
+          {mode === 'path' && (
+            <button className={ortho ? 'active' : ''} onClick={() => setOrtho((v) => !v)}
+              title="Snapping ortogonal: ajusta los tramos a ángulos de 45°/90°">
+              ⟂
+            </button>
+          )}
+          {mode === 'marker' && (
+            <select value={markerType} onChange={(e) => setMarkerType(e.target.value)}
+              title="Tipo de elemento a colocar">
+              {MARKER_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+            </select>
+          )}
+          {mode === 'path' && taps.length > 0 && (
+            <>
+              {taps.length >= 3 && <button onClick={() => savePath(true)}>⬛ Área</button>}
+              {taps.length >= 2 && <button onClick={() => savePath(false)}>💾 Ruta</button>}
+            </>
+          )}
+          <span className="tb-sep" aria-hidden />
+          <button onClick={undo} title="Deshacer último punto o medición (Ctrl+Z)">↩️</button>
+          <button onClick={() => { setTaps([]); setMessage(MODES.find((m) => m.id === mode)?.hint ?? '') }}
+            title="Cancelar puntos en curso">🗑️</button>
+          <span className="tb-sep" aria-hidden />
+          <button className={gyro ? 'active' : ''} onClick={toggleGyro}
+            title="Giroscopio: mirar moviendo el teléfono">🧭</button>
+          <button className={levelOpen ? 'active' : ''} onClick={() => setLevelOpen((v) => !v)}
+            title="Nivelación fina: corrige la inclinación de la foto (clave para la precisión)">🎚️</button>
+          <button onClick={screenshot} title="Descargar captura PNG de la vista con las mediciones">📸</button>
+          {laserSupported() && (
+            <button className={laser ? 'active' : ''} onClick={toggleLaser}
+              title="Conectar un láser Bluetooth (Bosch GLM o Workpulse DIY). Su lectura se usa al calibrar.">
+              🔗{laserReading != null ? ` ${laserReading.toFixed(2)} m` : ''}
+            </button>
+          )}
+          <span className="tb-sep" aria-hidden />
+          <button onClick={() => setPanelOpen((v) => !v)} title="Mostrar u ocultar la lista de mediciones">📋</button>
+          <button onClick={onClose} title="Volver al inicio">✕</button>
+        </div>
       </div>
 
       {panelOpen && (
