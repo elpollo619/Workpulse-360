@@ -136,6 +136,18 @@ export default function App360() {
     const added = files.map((f) => ({ name: f.name, url: URL.createObjectURL(f) }))
     for (const f of files) {
       savePhoto(f.name, f).catch(() => {})
+      // Validación al importar: una foto 360 equirectangular debe ser 2:1;
+      // otra proporción produce medidas erróneas (aviso antes de trabajar).
+      const probe = new Image()
+      probe.onload = () => {
+        const ratio = probe.width / probe.height
+        if (Math.abs(ratio - 2) > 0.06) {
+          alert(`⚠️ «${f.name}» tiene proporción ${ratio.toFixed(2)}:1, no 2:1.\n` +
+            'No parece una foto 360 equirectangular completa — las medidas pueden salir mal. ' +
+            'Exporta desde la app de la cámara en formato equirectangular.')
+        }
+      }
+      probe.src = URL.createObjectURL(f)
       // Auto-nivel: si la foto trae pose GPano (Insta360/Theta) y aún no hay
       // ajuste manual, se pre-carga la nivelación fina.
       readGPanoPose(f).then((pose) => {
@@ -362,7 +374,10 @@ export default function App360() {
     <div className="app360-landing">
       <header className="brand">
         <h1>Workpulse<span>360</span></h1>
-        <p>Medición de espacios con cámara 360°</p>
+        <p>
+          Medición profesional con cámara 360° — sin nube, sin cuenta,
+          sin suscripción: todo en tu dispositivo.
+        </p>
       </header>
 
       <label className="filebtn app360-open">

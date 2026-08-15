@@ -12,6 +12,17 @@ import { auditSummary } from './auditlog.js'
 
 /** Línea de daño/inundación: alturas etiquetadas como daño/agua/humedad. */
 const DAMAGE_RE = /da(ñ|n)o|agua|inundaci|humedad|flut|wasser|moho/i
+/** Hueco con dimensiones en la etiqueta: "ventana 1.2x1.5" → 1.8 m². */
+const OPENING_DIM_RE = /(\d+(?:[.,]\d+)?)\s*[x×]\s*(\d+(?:[.,]\d+)?)/
+const DOOR_LABEL_RE = /puerta|t(ü|u)r|porte|door/i
+
+function openingAreaOf(m) {
+  const match = OPENING_DIM_RE.exec(m.label ?? '')
+  if (!match) return 0
+  const w = parseFloat(match[1].replace(',', '.'))
+  const h = parseFloat(match[2].replace(',', '.'))
+  return w > 0 && h > 0 && w < 6 && h < 4 ? w * h : 0
+}
 
 /** Valor de control en la etiqueta: "puerta @0.93" → 0.93 m esperados. */
 const CONTROL_RE = /@\s*(\d+(?:[.,]\d+)?)/
@@ -110,12 +121,28 @@ function buildReportHTML(store, roomNames = {}, opts = {}, autoPrint = true) {
     if (roomArea > 0) stats.push(`Superficie: <b>${fmtArea(roomArea, u)}</b>`)
     if (perimeter > 0) stats.push(`Perímetro: <b>${fmtLength(perimeter, u)}</b>`)
     if (avgHeight != null) stats.push(`Altura media: <b>${fmtLength(avgHeight, u)}</b>`)
-    if (wallArea != null) stats.push(`Paredes (per. × alt.): <b>${fmtArea(wallArea, u)}</b>`)
+    if (wallArea != null) stats.push(`Paredes brutas (per. × alt.): <b>${fmtArea(wallArea, u)}</b>`)
     if (volume != null) stats.push(`Volumen: <b>${fmtVolume(volume, u)}</b>`)
-    // Estimación orientativa de pintura: 2 manos a 10 m²/L, paredes + techo.
+    // Huecos (etiquetas tipo "ventana 1.2x1.5") → pared NETA, la cifra con la
+    // que presupuestan pintores y alicatadores.
+    const openingsArea = ms.reduce((s, m) => s + openingAreaOf(m), 0)
+    const netWall = wallArea != null ? Math.max(0, wallArea - openingsArea) : null
+    if (openingsArea > 0 && netWall != null) {
+      stats.push(`Huecos declarados: <b>−${fmtArea(openingsArea, u)}</b> → paredes netas <b>${fmtArea(netWall, u)}</b>`)
+    }
+    // Rodapié: perímetro menos los anchos de puerta medidos.
+    if (perimeter > 0) {
+      const doorWidths = ms
+        .filter((m) => (m.mode === 'wall' || m.mode === 'distance') && DOOR_LABEL_RE.test(m.label ?? '') && m.value < 2.5)
+        .reduce((s, m) => s + m.value, 0)
+      if (doorWidths > 0) {
+        stats.push(`Rodapié (per. − puertas): <b>${fmtLength(Math.max(0, perimeter - doorWidths), u)}</b>`)
+      }
+    }
+    // Estimación orientativa de pintura: 2 manos a 10 m²/L, paredes netas + techo.
     if (wallArea != null) {
-      const paintL = ((wallArea + roomArea) * 2) / 10
-      stats.push(`Pintura orient.: <b>${paintL.toFixed(1)} L</b> <small>(2 manos, paredes+techo)</small>`)
+      const paintL = (((netWall ?? wallArea) + roomArea) * 2) / 10
+      stats.push(`Pintura orient.: <b>${paintL.toFixed(1)} L</b> <small>(2 manos, paredes netas+techo)</small>`)
     }
     // Línea de daño (peritaje tipo seguro): altura etiquetada como daño/agua
     // → superficie de pared afectada hasta esa cota + suelo.
