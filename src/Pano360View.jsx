@@ -53,7 +53,7 @@ export const MEASURE_COLORS = [
   '#a78bfa', '#f87171', '#4ade80', '#22d3ee',
 ]
 
-const LOUPE = { size: 140, margin: 12, fov: 16 }
+const LOUPE = { size: 150, margin: 12, fov: 10 }
 
 /** Sprite de etiqueta (texto sobre fondo redondeado) para el visor. */
 function makeLabelSprite(text, color) {
@@ -102,6 +102,7 @@ function tapFromFloorPoint(fp, h) {
 export default function Pano360View({
   imageURL, measurements = [], onSave, onDelete, onRename, onOpenPlan, onClose,
   extraControls, initialCamHeight = 1.6, onCamHeight, unitSys = 'm', onUnitSys,
+  initialLevel = { pitch: 0, roll: 0 }, onLevel,
 }) {
   const mountRef = useRef(null)
   const stateRef = useRef({})
@@ -122,6 +123,9 @@ export default function Pano360View({
   const keepMsgRef = useRef(false)
   const [markerType, setMarkerType] = useState('enchufe')
   const markerTypeRef = useRef('enchufe')
+  const [level, setLevel] = useState(initialLevel) // grados {pitch, roll}
+  const [levelOpen, setLevelOpen] = useState(false)
+  const calibSamplesRef = useRef([]) // muestras {h, w} de calibración
   const [laser, setLaser] = useState(null) // {disconnect}
   const [laserReading, setLaserReading] = useState(null) // metros
   const laserRef = useRef({ value: null, at: 0 })
@@ -204,9 +208,23 @@ export default function Pano360View({
     const h = solveCameraHeight(camHeightRef.current, measured, real)
     if (h == null) {
       setMessage('⚠️ Valor no válido. La altura resultante debe estar entre 0.2 y 10 m.')
+      setTaps([])
+      return
+    }
+    // Calibración multi-muestra: cada referencia añade una estimación de h y
+    // se ajusta la media ponderada por longitud (las referencias largas pesan
+    // más). La dispersión entre muestras estima la calidad de la calibración.
+    calibSamplesRef.current.push({ h, w: real })
+    const samples = calibSamplesRef.current
+    const wSum = samples.reduce((s, x) => s + x.w, 0)
+    const hFit = samples.reduce((s, x) => s + x.h * x.w, 0) / wSum
+    setCamHeight(Math.round(hFit * 1000) / 1000)
+    if (samples.length === 1) {
+      setMessage(`🎯 Altura de cámara calibrada: ${hFit.toFixed(3)} m. Añade otra referencia (en otra dirección) para afinar más.`)
     } else {
-      setCamHeight(Math.round(h * 100) / 100)
-      setMessage(`🎯 Altura de cámara calibrada: ${h.toFixed(2)} m. Las nuevas medidas la usarán.`)
+      const disp = Math.max(...samples.map((x) => Math.abs(x.h - hFit))) / hFit * 100
+      const quality = disp < 1 ? 'excelente' : disp < 2.5 ? 'buena' : '⚠️ revisa la nivelación'
+      setMessage(`🎯 h = ${hFit.toFixed(3)} m con ${samples.length} referencias · dispersión ±${disp.toFixed(1)} % (${quality})`)
     }
     setTaps([])
   }
@@ -415,6 +433,21 @@ export default function Pano360View({
   // El láser se desconecta al cerrar el visor.
   useEffect(() => () => { laser?.disconnect() }, [laser])
 
+  // Nivelación fina: girar la ESFERA compensa la inclinación de la cámara al
+  // capturar; los rayos de medición siguen en coordenadas de mundo niveladas.
+  useEffect(() => {
+    const { sphere, verticalsGroup } = stateRef.current
+    if (!sphere) return
+    sphere.rotation.set(
+      THREE.MathUtils.degToRad(level.pitch),
+      0,
+      THREE.MathUtils.degToRad(level.roll)
+    )
+    if (verticalsGroup) verticalsGroup.visible = levelOpen
+    onLevel?.(level)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [level, levelOpen, imageURL])
+
   // Atajos de teclado: Ctrl+Z deshacer, Escape cancelar, Enter cerrar área.
   useEffect(() => {
     const onKey = (e) => {
@@ -509,6 +542,29 @@ export default function Pano360View({
       new THREE.LineBasicMaterial({ color: 0x8b9aa7, transparent: true, opacity: 0.35 })
     )
     scene.add(horizon)
+
+    // Rejilla de verticales (círculos máximos por el cénit cada 30° de yaw):
+    // al nivelar, las aristas verticales de puertas y paredes deben quedar
+    // paralelas a estas guías. Solo visible con el panel de nivel abierto.
+    const verticalsGroup = new THREE.Group()
+    for (let yaw = 0; yaw < 360; yaw += 30) {
+      const pts = []
+      const ya = (yaw * Math.PI) / 180
+      for (let i = 0; i <= 64; i++) {
+        const t = -Math.PI / 2 + (i / 64) * Math.PI
+        pts.push(new THREE.Vector3(
+          Math.cos(t) * Math.sin(ya) * 49,
+          Math.sin(t) * 49,
+          Math.cos(t) * Math.cos(ya) * 49
+        ))
+      }
+      verticalsGroup.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(pts),
+        new THREE.LineBasicMaterial({ color: 0x34d399, transparent: true, opacity: 0.3 })
+      ))
+    }
+    verticalsGroup.visible = false
+    scene.add(verticalsGroup)
 
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableZoom = false
@@ -669,7 +725,7 @@ export default function Pano360View({
     renderer.domElement.addEventListener('pointerleave', onLeave)
     renderer.domElement.addEventListener('pointerup', onUp)
 
-    stateRef.current = { scene, camera, renderer, savedGroup, draftGroup, controls, sphere }
+    stateRef.current = { scene, camera, renderer, savedGroup, draftGroup, controls, sphere, verticalsGroup }
 
     // Orientación por giroscopio (algoritmo W3C clásico de three.js).
     const zee = new THREE.Vector3(0, 0, 1)
@@ -931,6 +987,8 @@ export default function Pano360View({
           title="Cancelar puntos en curso">🗑️</button>
         <button className={gyro ? 'active' : ''} onClick={toggleGyro}
           title="Giroscopio: mirar moviendo el teléfono">🧭</button>
+        <button className={levelOpen ? 'active' : ''} onClick={() => setLevelOpen((v) => !v)}
+          title="Nivelación fina: corrige la inclinación de la foto (clave para la precisión)">🎚️</button>
         <button onClick={screenshot} title="Descargar captura PNG de la vista con las mediciones">📸</button>
         {laserSupported() && (
           <button className={laser ? 'active' : ''} onClick={toggleLaser}
@@ -974,6 +1032,24 @@ export default function Pano360View({
               🗺️ Plano de planta
             </button>
           )}
+        </div>
+      )}
+
+      {levelOpen && (
+        <div className="pano360-level">
+          <b>🎚️ Nivelación fina</b>
+          <span className="hint">Alinea las aristas verticales (puertas, esquinas) con las guías verdes y el horizonte con la línea gris.</span>
+          {['pitch', 'roll'].map((axis) => (
+            <label key={axis}>
+              {axis === 'pitch' ? 'Cabeceo' : 'Alabeo'}
+              <input
+                type="range" min="-5" max="5" step="0.05" value={level[axis]}
+                onChange={(e) => setLevel((prev) => ({ ...prev, [axis]: parseFloat(e.target.value) }))}
+              />
+              <span className="val">{level[axis].toFixed(2)}°</span>
+            </label>
+          ))}
+          <button onClick={() => setLevel({ pitch: 0, roll: 0 })}>Reiniciar</button>
         </div>
       )}
 

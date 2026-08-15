@@ -13,6 +13,7 @@ const HEIGHTS_KEY = 'workpulse360.camheights.v1'
 const UNITS_KEY = 'workpulse360.units.v1'
 const TYPES_KEY = 'workpulse360.roomtypes.v1'
 const WEIGHTS_KEY = 'workpulse360.weights.v1'
+const LEVEL_KEY = 'workpulse360.level.v1'
 
 const DEFAULT_WEIGHTS = { BALKON: 0.5, TERRASSE: 1 / 3, GARTEN: 0.1 }
 
@@ -37,6 +38,7 @@ export default function App360() {
   const [camHeights, setCamHeights] = useState(() => loadJSON(HEIGHTS_KEY)) // { [photoName]: 1.6 }
   const [roomTypes, setRoomTypes] = useState(() => loadJSON(TYPES_KEY)) // { [photoName]: 'HNF' }
   const [weights, setWeights] = useState(() => ({ ...DEFAULT_WEIGHTS, ...loadJSON(WEIGHTS_KEY) }))
+  const [levels, setLevels] = useState(() => loadJSON(LEVEL_KEY)) // { [photoName]: {pitch, roll} }
   const [unitSys, setUnitSys] = useState(() => localStorage.getItem(UNITS_KEY) || 'm')
   const [showPlan, setShowPlan] = useState(false)
   const [showAssembly, setShowAssembly] = useState(false)
@@ -62,6 +64,9 @@ export default function App360() {
   useEffect(() => {
     localStorage.setItem(WEIGHTS_KEY, JSON.stringify(weights))
   }, [weights])
+  useEffect(() => {
+    localStorage.setItem(LEVEL_KEY, JSON.stringify(levels))
+  }, [levels])
 
   // Restaurar las fotos guardadas en IndexedDB (la sesión sobrevive recargas).
   useEffect(() => {
@@ -215,6 +220,12 @@ export default function App360() {
           onCamHeight={(h) => setCamHeights((prev) => (prev[active.name] === h ? prev : { ...prev, [active.name]: h }))}
           unitSys={unitSys}
           onUnitSys={setUnitSys}
+          initialLevel={levels[active.name] ?? { pitch: 0, roll: 0 }}
+          onLevel={(lv) => setLevels((prev) => {
+            const cur = prev[active.name]
+            if (cur && cur.pitch === lv.pitch && cur.roll === lv.roll) return prev
+            return { ...prev, [active.name]: lv }
+          })}
           extraControls={
             <>
               {photos.length > 1 && (

@@ -4,6 +4,7 @@
 export const UNIT_SYSTEMS = [
   { id: 'm', label: 'm' },
   { id: 'cm', label: 'cm' },
+  { id: 'mm', label: 'mm' },
   { id: 'ft', label: 'ft-in' },
 ]
 
@@ -12,6 +13,7 @@ const M_PER_FT = 0.3048
 /** Formatea una longitud en metros según el sistema elegido. */
 export function fmtLength(meters, sys = 'm', decimals = 2) {
   if (sys === 'cm') return `${(meters * 100).toFixed(0)} cm`
+  if (sys === 'mm') return `${(meters * 1000).toFixed(0)} mm`
   if (sys === 'ft') {
     // Pies y pulgadas con fracción de 1/8″ (estándar de construcción en EE. UU.).
     const eighths = Math.round((meters / M_PER_FT) * 12 * 8)

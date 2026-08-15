@@ -43,6 +43,10 @@ del dispositivo.
   **Bosch GLM con Bluetooth** (GLM 50-27 C, GLM 50 C…) y con el láser DIY
   de la carpeta [`hardware/`](hardware/); la lectura se propone sola al
   calibrar (Chrome/Edge)
+- 🎚️ **Modo precisión**: nivelación fina de la foto (cabeceo/alabeo con
+  rejilla de verticales, persistida por foto), **calibración multi-muestra**
+  con ajuste ponderado e indicador de dispersión, unidad **mm** y lupa de
+  mayor aumento
 - 🔌 **Planificación eléctrica**: coloca enchufes, interruptores,
   luminarias, cajas y tomas sobre la foto — aparecen como símbolos en el
   plano y el DXF (capa ELEMENTOS) con recuento por habitación en el informe
