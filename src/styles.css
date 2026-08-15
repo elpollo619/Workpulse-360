@@ -675,6 +675,13 @@ details.app360-step p { margin-top: 10px; }
   height: 100%;
   object-fit: cover;
 }
+.live-sphere { position: absolute; inset: 0; }
+.live-bar select {
+  color: var(--optic-text);
+  background: var(--optic-1);
+  border: 1px solid var(--optic-line);
+  max-width: 220px;
+}
 .live-error {
   position: absolute;
   top: 40%;

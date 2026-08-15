@@ -561,7 +561,20 @@ export default function App360() {
         ¿Mediciones de terreno con drone? → <a href="../">Workpulse Drohne 🚁</a>
       </footer>
 
-      {showLive && <LiveMode onClose={() => setShowLive(false)} />}
+      {showLive && (
+        <LiveMode
+          onClose={() => setShowLive(false)}
+          onCapture={(blob) => {
+            // Fotograma 360 en vivo → foto medible de la sesión, directo al visor.
+            const name = `en-vivo-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.png`
+            savePhoto(name, blob).catch(() => {})
+            setPhotos((prev) => [...prev, { name, url: URL.createObjectURL(blob) }])
+            setShowLive(false)
+            setActiveName(name)
+            appendAudit('capturar', `${name} desde cámara en vivo`)
+          }}
+        />
+      )}
       {showStereo && (
         <StereoMode
           photos={photos}
