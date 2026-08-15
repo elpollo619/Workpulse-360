@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import {
   floorPointFromDirection, floorDistance, floorPathLength,
   floorPolygonArea, objectHeight, solveCameraHeight, snapToAngle, bearingOf,
-  wallPlaneFromPoints, wallPointFromDirection, dist3D,
+  wallPlaneFromPoints, wallPointFromDirection, dist3D, estimateError,
 } from './pano.js'
 import { UNIT_SYSTEMS, fmtLength, fmtArea, fmtValue } from './units.js'
 import { laserSupported, connectLaser } from './laser.js'
@@ -126,6 +126,7 @@ export default function Pano360View({
   const [level, setLevel] = useState(initialLevel) // grados {pitch, roll}
   const [levelOpen, setLevelOpen] = useState(false)
   const calibSamplesRef = useRef([]) // muestras {h, w} de calibración
+  const imgWRef = useRef(0) // ancho en píxeles de la foto (para la incertidumbre)
   const [laser, setLaser] = useState(null) // {disconnect}
   const [laserReading, setLaserReading] = useState(null) // metros
   const laserRef = useRef({ value: null, at: 0 })
@@ -164,6 +165,7 @@ export default function Pano360View({
       points: [a.fp, b.fp],
       dirs: [a.dir, b.dir],
       camHeight: camHeightRef.current,
+      imgW: imgWRef.current,
     })
     setMessage(`📏 Guardado: ${fmtLength(value, unitRef.current)}`)
     setTaps([])
@@ -272,6 +274,7 @@ export default function Pano360View({
       points: [foot.fp],
       dirs: [foot.dir, topDir],
       camHeight: camHeightRef.current,
+      imgW: imgWRef.current,
     })
     setMessage(`📊 Guardado: altura ${fmtLength(value, unitRef.current)}`)
     setTaps([])
@@ -296,6 +299,7 @@ export default function Pano360View({
       dirs: current.map((t) => t.dir),
       closed: isArea,
       camHeight: camHeightRef.current,
+      imgW: imgWRef.current,
     })
     setMessage(isArea
       ? `📐 Guardado: área ${fmtArea(value, unitRef.current)}`
@@ -339,6 +343,7 @@ export default function Pano360View({
         return { x: p.x / n, y: p.y / n, z: p.z / n }
       }),
       camHeight: camHeightRef.current,
+      imgW: imgWRef.current,
     })
     setMessage(`🧱 Guardado: ${fmtLength(value, unitRef.current)} sobre la pared. Sigue midiendo en la misma pared o cambia de modo.`)
     // La base de la pared se conserva para encadenar más medidas; se salta el
@@ -391,6 +396,7 @@ export default function Pano360View({
       points: [tap.fp],
       dirs: [tap.dir],
       camHeight: camHeightRef.current,
+      imgW: imgWRef.current,
     })
     setMessage(`${type.label} colocado a ${fmtLength(tap.fp.horizontal, unitRef.current)} de la cámara. Sigue colocando o cambia de modo.`)
     setTaps([])
@@ -409,6 +415,7 @@ export default function Pano360View({
       points: [],
       dirs: [dir],
       camHeight: camHeightRef.current,
+      imgW: imgWRef.current,
     })
     setMessage('📝 Nota anclada')
     setTaps([])
@@ -524,6 +531,7 @@ export default function Pano360View({
       tex.colorSpace = THREE.SRGBColorSpace
       sphere.material.map = tex
       sphere.material.needsUpdate = true
+      imgWRef.current = tex.image?.width ?? 0
     })
 
     const savedGroup = new THREE.Group()
@@ -1023,7 +1031,13 @@ export default function Pano360View({
                 >
                   {mm.label}
                 </span>
-                <span className="val" style={{ cursor: 'copy' }} title="Clic para copiar el valor"
+                <span className="val" style={{ cursor: 'copy' }}
+                  title={(() => {
+                    const e = estimateError(mm)
+                    return e != null
+                      ? `Incertidumbre estimada: ±${mm.unit === 'm²' ? fmtArea(e, unitSys) : fmtLength(e, unitSys)} · clic para copiar`
+                      : 'Clic para copiar el valor'
+                  })()}
                   onClick={() => copyValue(mm)}>
                   {mm.mode === 'note' ? `📝 ${(mm.text ?? '').slice(0, 22)}`
                     : mm.mode === 'marker' ? (MARKER_TYPES.find((t) => t.id === mm.text)?.label ?? mm.text)

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import Pano360View from './Pano360View.jsx'
 import FloorPlan from './FloorPlan.jsx'
 import PlanAssembly from './PlanAssembly.jsx'
-import { openSessionReport, downloadSessionReport } from './report360.js'
+import { openSessionReport, downloadSessionReport, getSessionReportHTML } from './report360.js'
 import { savePhoto, listPhotos, deletePhoto } from './photostore.js'
 import { fmtArea } from './units.js'
 import { SIA416_TYPES, DEFAULT_TYPE } from './sia.js'
@@ -98,7 +98,10 @@ export default function App360() {
     const ms = store[activeName] ?? []
     const m = ms.find((x) => x.id === id)
     if (!m) return
-    const label = prompt('Etiqueta de la medición:', m.label)
+    const label = prompt(
+      'Etiqueta de la medición.\nConsejo: añade "@valor" (p. ej. "puerta @0.93") con la medida real de tu láser o cinta — el informe la comparará como CONTROL de calidad:',
+      m.label
+    )
     if (!label) return
     setStore((prev) => ({
       ...prev,
@@ -258,6 +261,24 @@ export default function App360() {
     URL.revokeObjectURL(url)
   }
 
+  // Compartir el informe directamente (WhatsApp, correo…) vía Web Share.
+  async function shareReport() {
+    const html = buildShareableReport()
+    if (!html) return
+    const file = new File([html], 'workpulse360-informe.html', { type: 'text/html' })
+    if (navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: 'Informe Workpulse 360' })
+      } catch { /* cancelado por el usuario */ }
+    } else {
+      trigger(new Blob([html], { type: 'text/html' }), 'workpulse360-informe.html')
+    }
+  }
+
+  function buildShareableReport() {
+    return getSessionReportHTML(store, roomNames, { unitSys, roomTypes, weights, camHeights, levels })
+  }
+
   if (active) {
     return (
       <div className="app360-stage">
@@ -394,9 +415,12 @@ export default function App360() {
         <div className="toolgroup">
           <span className="toolgroup-label">Planos e informes</span>
           <div className="tools">
-            <button onClick={() => openSessionReport(store, roomNames, { unitSys, roomTypes, weights })}>🖨️ Informe (PDF)</button>
-            <button onClick={() => downloadSessionReport(store, roomNames, { unitSys, roomTypes, weights })}
+            <button onClick={() => openSessionReport(store, roomNames, { unitSys, roomTypes, weights, camHeights, levels })}>🖨️ Informe (PDF)</button>
+            <button onClick={() => downloadSessionReport(store, roomNames, { unitSys, roomTypes, weights, camHeights, levels })}
               title="Informe como archivo HTML autónomo (se abre en cualquier navegador)">📑 Informe HTML</button>
+            {typeof navigator !== 'undefined' && !!navigator.canShare && (
+              <button onClick={shareReport} title="Enviar el informe por WhatsApp, correo…">📤 Compartir</button>
+            )}
             {roomsWithOutline > 0 && (
               <button onClick={() => setShowAssembly(true)}
                 title="Ensamblar todas las habitaciones en un plano de conjunto">

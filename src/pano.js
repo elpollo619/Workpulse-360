@@ -135,3 +135,32 @@ export function wallPointFromDirection(dir, plane) {
 export function dist3D(p1, p2) {
   return Math.hypot(p2.x - p1.x, p2.y - p1.y, p2.z - p1.z)
 }
+
+/**
+ * Incertidumbre estimada de una medición (metros), por propagación del
+ * error angular de marcado: con σ_ang de ~2.5 px sobre el ancho de la foto,
+ * el error radial de un punto del suelo es dr = ((h² + r²)/h)·σ_ang.
+ * Aproximaciones documentadas: distancia = √(Σdr²); área ≈ perímetro·d̄r/2.
+ * Devuelve null si no hay datos suficientes.
+ */
+export function estimateError(m, pixelSigma = 2.5) {
+  const W = m.imgW
+  const h = m.camHeight
+  if (!W || !h || !(m.points?.length >= 1)) return null
+  const sigma = (pixelSigma * 2 * Math.PI) / W // rad
+  const drOf = (p) => {
+    const r = p.horizontal ?? Math.hypot(p.x ?? 0, p.z ?? 0)
+    return ((h * h + r * r) / h) * sigma
+  }
+  const drs = m.points.map(drOf)
+  const rss = Math.sqrt(drs.reduce((s, e) => s + e * e, 0))
+  if (m.mode === 'area') {
+    const avg = drs.reduce((s, e) => s + e, 0) / drs.length
+    return ((m.perimeter ?? 4 * Math.sqrt(m.value)) * avg) / 2 // m²
+  }
+  if (m.mode === 'height' || m.mode === 'slope') {
+    // La altura hereda el error del pie amplificado por la geometría.
+    return drs[0] * Math.max(1, m.value / h)
+  }
+  return rss
+}

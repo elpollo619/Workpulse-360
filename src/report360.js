@@ -7,6 +7,49 @@
 import { buildPlanSVG } from './plansvg.js'
 import { fmtLength, fmtArea, fmtVolume, fmtValue } from './units.js'
 import { SIA416_TYPES, DEFAULT_TYPE, sia416Breakdown, evaluateChecks } from './sia.js'
+import { estimateError } from './pano.js'
+
+/** Valor de control en la etiqueta: "puerta @0.93" → 0.93 m esperados. */
+const CONTROL_RE = /@\s*(\d+(?:[.,]\d+)?)/
+
+function controlOf(m) {
+  const match = CONTROL_RE.exec(m.label ?? '')
+  if (!match || !(m.value > 0)) return null
+  const expected = parseFloat(match[1].replace(',', '.'))
+  if (!(expected > 0)) return null
+  const deltaPct = ((m.value - expected) / expected) * 100
+  return { expected, deltaPct }
+}
+
+/**
+ * Índice de fiabilidad de la habitación (A/B/C) con razones — control de
+ * calidad automático que las apps comerciales no ofrecen.
+ */
+function reliabilityOf(ms, { calibrated, leveled } = {}) {
+  const reasons = []
+  let score = 0
+  if (calibrated) { score += 2; reasons.push('altura de cámara calibrada') }
+  else reasons.push('⚠️ altura de cámara sin calibrar (1.60 m por defecto)')
+  if (leveled) { score += 1; reasons.push('foto nivelada') }
+  const floorPts = ms.flatMap((m) => m.points ?? []).filter((p) => p.horizontal != null)
+  if (floorPts.length) {
+    const nearShare = floorPts.filter((p) => p.horizontal < 4).length / floorPts.length
+    if (nearShare >= 0.8) { score += 2; reasons.push('puntos cercanos a la cámara') }
+    else if (nearShare >= 0.5) { score += 1; reasons.push('algunos puntos lejanos') }
+    else reasons.push('⚠️ mayoría de puntos lejanos (>4 m)')
+  }
+  const controls = ms.map(controlOf).filter(Boolean)
+  if (controls.length) {
+    const worst = Math.max(...controls.map((c) => Math.abs(c.deltaPct)))
+    if (worst < 2) { score += 2; reasons.push(`${controls.length} control(es) dentro de ±2 %`) }
+    else if (worst < 5) { score += 1; reasons.push('controles con desvío moderado') }
+    else reasons.push('⚠️ un control supera el 5 % de desvío')
+  } else {
+    reasons.push('sin valores de control (añade "@valor" a una etiqueta medida con láser)')
+  }
+  const grade = score >= 5 ? 'A' : score >= 3 ? 'B' : 'C'
+  return { grade, reasons }
+}
 
 const esc = (s) =>
   String(s ?? '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))
@@ -46,8 +89,17 @@ function buildReportHTML(store, roomNames = {}, opts = {}, autoPrint = true) {
         height: '📊 Altura', wall: '🧱 Pared', note: '📝 Nota',
         slope: '⛰️ Pendiente', marker: '🔌 Elemento',
       }[m.mode] ?? m.mode
+      const err = estimateError(m)
+      const errTxt = err != null
+        ? `±${m.unit === 'm²' ? fmtArea(err, u) : fmtLength(err, u, 3)}`
+        : '—'
+      const ctrl = controlOf(m)
+      const ctrlTxt = ctrl
+        ? `${Math.abs(ctrl.deltaPct) < 2 ? '✅' : Math.abs(ctrl.deltaPct) < 5 ? '⚠️' : '❌'} ` +
+          `${fmtLength(ctrl.expected, u)} (${ctrl.deltaPct >= 0 ? '+' : ''}${ctrl.deltaPct.toFixed(1)} %)`
+        : '—'
       return `<tr><td>${esc(m.label)}</td><td>${tipo}</td><td>${esc(fmtValue(m, u))}</td>` +
-        `<td>${m.perimeter ? fmtLength(m.perimeter, u) : '—'}</td></tr>`
+        `<td>${errTxt}</td><td>${ctrlTxt}</td><td>${m.perimeter ? fmtLength(m.perimeter, u) : '—'}</td></tr>`
     }).join('')
 
     const stats = []
@@ -74,6 +126,10 @@ function buildReportHTML(store, roomNames = {}, opts = {}, autoPrint = true) {
       : ''
     const typeId = roomTypes[photo] ?? DEFAULT_TYPE
     const type = SIA416_TYPES.find((t) => t.id === typeId) ?? SIA416_TYPES[0]
+    const rel = reliabilityOf(ms, {
+      calibrated: opts.camHeights?.[photo] != null && opts.camHeights[photo] !== 1.6,
+      leveled: !!(opts.levels?.[photo] && (opts.levels[photo].pitch || opts.levels[photo].roll)),
+    })
     const checks = evaluateChecks(ms)
     const checksHTML = checks.length
       ? `<ul class="checks">${checks.map((c) =>
@@ -82,9 +138,11 @@ function buildReportHTML(store, roomNames = {}, opts = {}, autoPrint = true) {
       : ''
     return `
       <section>
-        <h2>${esc(name)} <span class="siatype">${esc(type.short)}</span>${roomArea > 0 ? ` — ${fmtArea(roomArea, u)}` : ''}</h2>
+        <h2>${esc(name)} <span class="siatype">${esc(type.short)}</span>
+          <span class="rel rel-${rel.grade}">Fiabilidad ${rel.grade}</span>${roomArea > 0 ? ` — ${fmtArea(roomArea, u)}` : ''}</h2>
+        <p class="relwhy">${rel.reasons.map(esc).join(' · ')}</p>
         ${stats.length ? `<div class="stats">${stats.join(' · ')}</div>` : ''}
-        <table><tr><th>Etiqueta</th><th>Tipo</th><th>Valor</th><th>Perímetro</th></tr>${rows}</table>
+        <table><tr><th>Etiqueta</th><th>Tipo</th><th>Valor</th><th>Incert.</th><th>Control</th><th>Perímetro</th></tr>${rows}</table>
         ${checksHTML}
         ${plan ? `<div class="plan">${plan}</div>` : ''}
         <p class="method">Método: proyección al plano del suelo con cámara a ${camHs.length ? camHs.join(' / ') : '?'} m.
@@ -135,6 +193,11 @@ function buildReportHTML(store, roomNames = {}, opts = {}, autoPrint = true) {
   .method { color: #888; font-size: 11px; margin: 6px 0 0; }
   .siatype { font-size: 11px; background: #e8eef4; border: 1px solid #c8d4de; border-radius: 10px;
              padding: 1px 8px; vertical-align: middle; color: #456; }
+  .rel { font-size: 11px; border-radius: 10px; padding: 1px 8px; vertical-align: middle; font-weight: 700; }
+  .rel-A { background: #e3f6ec; border: 1px solid #9ad9b9; color: #17714a; }
+  .rel-B { background: #fdf3df; border: 1px solid #ecd096; color: #8a6510; }
+  .rel-C { background: #fdeaea; border: 1px solid #efb3b3; color: #a52a24; }
+  .relwhy { color: #889; font-size: 11px; margin: 3px 0 8px; }
   .checks { list-style: none; padding: 0; margin: 4px 0 10px; font-size: 12.5px; }
   .checks li { padding: 3px 0; }
   .checks li.fail { color: #b3261e; }
@@ -157,6 +220,11 @@ ${autoPrint ? '<script>window.onload = () => setTimeout(() => window.print(), 30
 </body></html>`
 
   return html
+}
+
+/** Devuelve el HTML autónomo del informe (para compartir o guardar). */
+export function getSessionReportHTML(store, roomNames = {}, opts = {}) {
+  return buildReportHTML(store, roomNames, opts, false)
 }
 
 /** Abre el informe en una ventana y lanza el diálogo de imprimir/PDF. */
