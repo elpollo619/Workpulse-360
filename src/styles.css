@@ -786,6 +786,20 @@ details.app360-step p { margin-top: 10px; }
 .coach ol { margin: 0; padding-left: 20px; font-size: 13.5px; line-height: 1.65; }
 .coach ol b { font-size: 13.5px; letter-spacing: 0.02em; }
 .coach .hint { color: var(--ink-2); }
+.coach button { width: 100%; text-align: left; }
+.coach button.active { text-align: center; }
+.wizard-reading {
+  font-family: var(--font-mono);
+  font-size: 30px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--orange);
+  text-align: center;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r);
+  background: var(--paper);
+  padding: 10px;
+}
 
 /* ============================================================
    Móvil

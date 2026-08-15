@@ -103,7 +103,7 @@ function tapFromFloorPoint(fp, h) {
 export default function Pano360View({
   imageURL, measurements = [], onSave, onDelete, onRename, onOpenPlan, onClose,
   extraControls, initialCamHeight = 1.6, onCamHeight, unitSys = 'm', onUnitSys,
-  initialLevel = { pitch: 0, roll: 0 }, onLevel,
+  initialLevel = { pitch: 0, roll: 0 }, onLevel, calibrated = false,
 }) {
   const mountRef = useRef(null)
   const stateRef = useRef({})
@@ -126,7 +126,13 @@ export default function Pano360View({
   const markerTypeRef = useRef('enchufe')
   const [level, setLevel] = useState(initialLevel) // grados {pitch, roll}
   const [accessPoint, setAccessPoint] = useState(null) // {x,z} plantilla ♿
-  const [showCoach, setShowCoach] = useState(() => !localStorage.getItem('workpulse360.coach.v1'))
+  // Asistente de calibración: aparece solo si la foto aún no está calibrada.
+  const [wizard, setWizard] = useState(() => !calibrated)
+  const [wizardStep, setWizardStep] = useState('ask') // ask | manual | laser
+  const [wizardHeight, setWizardHeight] = useState('1.60')
+  // Modo simple por defecto: 3 herramientas; «Más» desbloquea el resto.
+  const [pro, setPro] = useState(() => localStorage.getItem('workpulse360.pro.v1') === '1')
+  const SIMPLE_IDS = ['distance', 'path', 'height']
   const [levelOpen, setLevelOpen] = useState(false)
   const calibSamplesRef = useRef([]) // muestras {h, w} de calibración
   const imgWRef = useRef(0) // ancho en píxeles de la foto (para la incertidumbre)
@@ -143,7 +149,14 @@ export default function Pano360View({
   // funciones de guardado del render actual (evita cierres obsoletos).
   const apiRef = useRef({})
 
-  useEffect(() => { camHeightRef.current = camHeight; onCamHeight?.(camHeight) }, [camHeight])
+  // La altura solo se persiste cuando el usuario la fija (no el 1.60 inicial):
+  // así el asistente de calibración sabe qué fotos siguen sin calibrar.
+  const firstHeightRun = useRef(true)
+  useEffect(() => {
+    camHeightRef.current = camHeight
+    if (firstHeightRun.current) { firstHeightRun.current = false; return }
+    onCamHeight?.(camHeight)
+  }, [camHeight])
   useEffect(() => { measurementsRef.current = measurements }, [measurements])
   useEffect(() => {
     modeRef.current = mode
@@ -423,6 +436,22 @@ export default function Pano360View({
     })
     setMessage('📝 Nota anclada')
     setTaps([])
+  }
+
+  // Cierra el asistente dejando al usuario listo para su primera medida.
+  function finishWizard(height, viaDoor = false) {
+    setWizard(false)
+    if (viaDoor) {
+      setMode('calibv')
+      return
+    }
+    if (height != null) {
+      const h = Math.round(height * 1000) / 1000
+      if (h === camHeight) onCamHeight?.(h)
+      else setCamHeight(h)
+    }
+    setMode('distance')
+    setTimeout(() => setMessage('📏 Listo. Toca DOS puntos del SUELO y tendrás tu primera medida.'), 50)
   }
 
   function undo() {
@@ -997,12 +1026,21 @@ export default function Pano360View({
       <div className="pano360-top">
         <div className="tb-row">
           <div className="pano360-modes">
-            {MODES.map((m) => (
+            {(pro ? MODES : MODES.filter((m) => SIMPLE_IDS.includes(m.id))).map((m) => (
               <button key={m.id} className={mode === m.id ? 'active' : ''} onClick={() => setMode(m.id)}
                 title={m.hint}>
                 {m.label}
               </button>
             ))}
+            <button onClick={() => {
+              const next = !pro
+              setPro(next)
+              localStorage.setItem('workpulse360.pro.v1', next ? '1' : '')
+              if (!next && !SIMPLE_IDS.includes(mode)) setMode('distance')
+            }}
+              title={pro ? 'Ocultar las herramientas avanzadas' : 'Mostrar todas las herramientas (pared, pendiente, elementos, SIA 500, calibración…)'}>
+              {pro ? '− Menos' : '⋯ Más'}
+            </button>
           </div>
         </div>
         <div className="tb-row">
@@ -1126,24 +1164,68 @@ export default function Pano360View({
         </div>
       )}
 
-      {showCoach && (
+      {wizard && (
         <div className="coach">
-          <b>Así se mide en 3 pasos</b>
-          <ol>
-            <li><b>Calibra una vez por foto:</b> conecta el láser (🔗), apúntalo
-              de la cámara al suelo y pulsa «⤓» — o usa 🎯/🚪 con una distancia
-              o puerta conocida.</li>
-            <li><b>Elige un modo</b> arriba (📏 distancia, 📐 área, 📊 altura…) y
-              <b> toca los puntos en la foto</b> — para suelos, toca siempre el
-              suelo; la lupa te ayuda a afinar.</li>
-            <li><b>Todo se guarda solo:</b> panel derecho, 🗺️ plano con cotas e
-              informe desde la pantalla de inicio.</li>
-          </ol>
-          <span className="hint">Arrastra para mirar alrededor · rueda o pellizco para acercar.</span>
-          <button className="active" onClick={() => {
-            localStorage.setItem('workpulse360.coach.v1', '1')
-            setShowCoach(false)
-          }}>Entendido, a medir</button>
+          {wizardStep === 'ask' && (
+            <>
+              <b>¿A qué altura estaba la cámara?</b>
+              <span className="hint">
+                Es lo único que la app necesita para convertir la foto en
+                medidas reales (la distancia del objetivo al suelo).
+              </span>
+              <button className="active" onClick={() => setWizardStep('manual')}>
+                📏 La sé — escribirla
+              </button>
+              {laserSupported() && (
+                <button onClick={async () => { setWizardStep('laser'); if (!laser) await toggleLaser() }}>
+                  🔗 Medirla con el láser Bluetooth
+                </button>
+              )}
+              <button onClick={() => finishWizard(null, true)}>
+                🚪 No la sé — calibrar con una puerta
+              </button>
+              <button onClick={() => finishWizard(1.6)}>
+                Saltar (usar 1.60 m aproximado)
+              </button>
+            </>
+          )}
+          {wizardStep === 'manual' && (
+            <>
+              <b>Altura de la cámara</b>
+              <span className="hint">
+                Mide del suelo al centro del objetivo (cinta o láser) y escríbela.
+              </span>
+              <label className="row">
+                <input
+                  type="number" min="0.3" max="5" step="0.01" value={wizardHeight}
+                  onChange={(e) => setWizardHeight(e.target.value)}
+                  style={{ flex: 1 }} autoFocus
+                /> m
+              </label>
+              <button className="active"
+                onClick={() => finishWizard(parseFloat(String(wizardHeight).replace(',', '.')) || 1.6)}>
+                ✓ Fijar y empezar a medir
+              </button>
+              <button onClick={() => setWizardStep('ask')}>← Volver</button>
+            </>
+          )}
+          {wizardStep === 'laser' && (
+            <>
+              <b>Altura con el láser</b>
+              <span className="hint">
+                Apoya el láser junto al objetivo de la cámara, apunta al suelo
+                en vertical y dispara. La lectura aparece aquí.
+              </span>
+              <div className="wizard-reading">
+                {laserReading != null ? `${laserReading.toFixed(3)} m` : laser ? 'esperando disparo…' : 'conectando…'}
+              </div>
+              <button className="active" disabled={laserReading == null}
+                onClick={() => finishWizard(laserReading)}>
+                ⤓ Fijar y empezar a medir
+              </button>
+              <button onClick={() => setWizardStep('ask')}>← Volver</button>
+            </>
+          )}
         </div>
       )}
 

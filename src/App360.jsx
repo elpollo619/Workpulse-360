@@ -352,6 +352,7 @@ export default function App360() {
           onOpenPlan={() => setShowPlan(true)}
           onClose={() => setActiveName(null)}
           initialCamHeight={camHeights[active.name] ?? 1.6}
+          calibrated={camHeights[active.name] != null}
           onCamHeight={(h) => setCamHeights((prev) => (prev[active.name] === h ? prev : { ...prev, [active.name]: h }))}
           unitSys={unitSys}
           onUnitSys={setUnitSys}
