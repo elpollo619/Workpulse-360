@@ -8,6 +8,10 @@ import { buildPlanSVG } from './plansvg.js'
 import { fmtLength, fmtArea, fmtVolume, fmtValue } from './units.js'
 import { SIA416_TYPES, DEFAULT_TYPE, sia416Breakdown, evaluateChecks } from './sia.js'
 import { estimateError } from './pano.js'
+import { auditSummary } from './auditlog.js'
+
+/** Línea de daño/inundación: alturas etiquetadas como daño/agua/humedad. */
+const DAMAGE_RE = /da(ñ|n)o|agua|inundaci|humedad|flut|wasser|moho/i
 
 /** Valor de control en la etiqueta: "puerta @0.93" → 0.93 m esperados. */
 const CONTROL_RE = /@\s*(\d+(?:[.,]\d+)?)/
@@ -113,6 +117,22 @@ function buildReportHTML(store, roomNames = {}, opts = {}, autoPrint = true) {
       const paintL = ((wallArea + roomArea) * 2) / 10
       stats.push(`Pintura orient.: <b>${paintL.toFixed(1)} L</b> <small>(2 manos, paredes+techo)</small>`)
     }
+    // Línea de daño (peritaje tipo seguro): altura etiquetada como daño/agua
+    // → superficie de pared afectada hasta esa cota + suelo.
+    const damageLines = ms.filter((m) => m.mode === 'height' && DAMAGE_RE.test(m.label ?? ''))
+    for (const d of damageLines) {
+      if (perimeter > 0) {
+        const affectedWall = perimeter * d.value
+        stats.push(`💧 <b>${esc(d.label)}</b> hasta ${fmtLength(d.value, u)}: paredes afectadas ` +
+          `<b>${fmtArea(affectedWall, u)}</b>${roomArea > 0 ? ` + suelo <b>${fmtArea(roomArea, u)}</b>` : ''}`)
+      }
+    }
+    // Cantidades de obra con mermas por patrón (práctica real de oficios).
+    if (roomArea > 0) {
+      stats.push(`Suelo con merma: recto <b>${fmtArea(roomArea * 1.1, u)}</b> (+10 %) · ` +
+        `diagonal <b>${fmtArea(roomArea * 1.2, u)}</b> (+20 %) · ` +
+        `espiga <b>${fmtArea(roomArea * 1.25, u)}</b> (+25 %)`)
+    }
     // Recuento de elementos de instalación (quantity takeoff eléctrico).
     const markers = ms.filter((m) => m.mode === 'marker')
     if (markers.length) {
@@ -213,6 +233,14 @@ function buildReportHTML(store, roomNames = {}, opts = {}, autoPrint = true) {
 ${totalArea > 0 ? `<div class="total"><b>Superficie total medida: ${fmtArea(totalArea, u)}</b>${totalVolume > 0 ? ` · Volumen total (tipo GV: GF × altura): ${fmtVolume(totalVolume, u)}` : ''}</div>` : ''}
 ${siaBlock}
 ${sections}
+${(() => {
+  const a = auditSummary()
+  return a ? `<h2>Registro de auditoría (cuaderno de campo digital)</h2>
+<p class="method">${a.count} acciones registradas entre ${new Date(a.first).toLocaleString('es-CH')} y
+${new Date(a.last).toLocaleString('es-CH')} en un registro solo-añadir encadenado con SHA-256.
+Hash de cabeza: <code>${a.head.slice(0, 24)}…</code> — cualquier alteración posterior de las mediciones
+rompe la cadena y es detectable. El registro completo viaja con el archivo de proyecto.</p>` : ''
+})()}
 <footer>Medidas por trigonometría sobre foto 360° equirectangular con altura de cámara conocida o calibrada
 (proyección al plano del suelo; alturas por pie/tope a plomada). Válido en suelos planos; la exactitud
 depende de la nivelación de la cámara y de la altura indicada. No es un levantamiento topográfico.</footer>

@@ -7,6 +7,7 @@ import { savePhoto, listPhotos, deletePhoto } from './photostore.js'
 import { fmtArea } from './units.js'
 import { SIA416_TYPES, DEFAULT_TYPE } from './sia.js'
 import { readGPanoPose, levelFromPose } from './gpano.js'
+import { appendAudit, fullAudit } from './auditlog.js'
 
 const STORE_KEY = 'workpulse360.measurements.v1'
 const NAMES_KEY = 'workpulse360.roomnames.v1'
@@ -157,13 +158,16 @@ export default function App360() {
       ...prev,
       [activeName]: [...(prev[activeName] ?? []), m],
     }))
+    appendAudit('medir', `${activeName} · ${m.label} · ${m.mode} · ${m.value?.toFixed?.(3) ?? ''} ${m.unit ?? ''} · h=${m.camHeight}`)
   }
 
   function deleteMeasurement(id) {
+    const gone = (store[activeName] ?? []).find((m) => m.id === id)
     setStore((prev) => ({
       ...prev,
       [activeName]: (prev[activeName] ?? []).filter((m) => m.id !== id),
     }))
+    if (gone) appendAudit('borrar', `${activeName} · ${gone.label} · ${gone.mode}`)
   }
 
   function exportCSV() {
@@ -187,9 +191,11 @@ export default function App360() {
       version: 1,
       exportedAt: new Date().toISOString(),
       store, roomNames, camHeights, roomTypes, levels, weights, unitSys,
+      auditLog: fullAudit(),
     }
     const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' })
     trigger(blob, 'proyecto-workpulse360.json')
+    appendAudit('exportar', 'proyecto JSON')
   }
 
   function applyProjectData(data) {
