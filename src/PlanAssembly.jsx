@@ -104,6 +104,9 @@ export default function PlanAssembly({ store, roomNames, roomTypes, unitSys = 'm
     }
   })
   const [selected, setSelected] = useState(null)
+  // Ruta de evacuación (VKF: máx. 35 m de recorrido real hasta la salida).
+  const [routeMode, setRouteMode] = useState(false)
+  const [routePts, setRoutePts] = useState([])
   const svgRef = useRef(null)
   const dragRef = useRef(null)
 
@@ -162,6 +165,10 @@ export default function PlanAssembly({ store, roomNames, roomTypes, unitSys = 'm
 
   function onPointerDown(e, photo) {
     e.preventDefault()
+    if (routeMode) {
+      setRoutePts((p) => [...p, pointerToWorld(e)])
+      return
+    }
     setSelected(photo)
     const w = pointerToWorld(e)
     const t = rooms.find((r) => r.photo === photo)?.t ?? { tx: 0, tz: 0, rot: 0 }
@@ -201,6 +208,16 @@ export default function PlanAssembly({ store, roomNames, roomTypes, unitSys = 'm
       }
     }
   }
+
+  function onSvgPointerDown(e) {
+    // En modo ruta, cualquier clic (también fuera de las salas) añade un punto.
+    if (routeMode && e.target === svgRef.current) {
+      setRoutePts((p) => [...p, pointerToWorld(e)])
+    }
+  }
+
+  const routeLen = routePts.reduce((s, p, i) =>
+    i ? s + Math.hypot(p.x - routePts[i - 1].x, p.z - routePts[i - 1].z) : 0, 0)
 
   function rotateSelected(deg) {
     if (!selected) return
@@ -294,6 +311,14 @@ export default function PlanAssembly({ store, roomNames, roomTypes, unitSys = 'm
             <button onClick={() => rotateSelected(-15)} disabled={!selected} title="Rotar la habitación seleccionada">⟲ 15°</button>{' '}
             <button onClick={() => rotateSelected(15)} disabled={!selected} title="Rotar la habitación seleccionada">⟳ 15°</button>{' '}
             <button onClick={() => setFitCount((c) => c + 1)} title="Reencuadrar la vista">🔍 Ajustar</button>{' '}
+            <button className={routeMode ? 'active' : ''}
+              onClick={() => setRouteMode((v) => !v)}
+              title="Ruta de evacuación: traza el recorrido real hasta la salida; la norma suiza VKF admite máx. 35 m">
+              🚪 Ruta
+            </button>{' '}
+            {routePts.length > 0 && (
+              <button onClick={() => setRoutePts([])} title="Borrar la ruta trazada">✗ Ruta</button>
+            )}{' '}
             <button onClick={downloadSVG}>SVG</button>{' '}
             <button onClick={downloadPNG}>PNG</button>{' '}
             <button onClick={onClose}>✕</button>
@@ -305,6 +330,7 @@ export default function PlanAssembly({ store, roomNames, roomTypes, unitSys = 'm
           xmlns="http://www.w3.org/2000/svg"
           style={{ width: '100%', height: 'auto', background: '#ffffff', borderRadius: 8, touchAction: 'none', cursor: 'grab' }}
           fontFamily="system-ui, sans-serif"
+          onPointerDown={onSvgPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerLeave={onPointerUp}
@@ -312,6 +338,26 @@ export default function PlanAssembly({ store, roomNames, roomTypes, unitSys = 'm
           <rect x="0" y="0" width={W} height={H} fill="#ffffff" />
           {gridLines}
           <text x={W - 10} y={H - 8} textAnchor="end" fontSize="11" fill="#8a97a3">cuadrícula {gridStep} m</text>
+          {routePts.length > 0 && (
+            <g pointerEvents="none">
+              <polyline
+                points={routePts.map((p) => `${sx(p.x).toFixed(1)},${sy(p.z).toFixed(1)}`).join(' ')}
+                fill="none" stroke={routeLen > 35 ? '#c3372c' : '#e05a10'}
+                strokeWidth="2.5" strokeDasharray="7 5" />
+              {routePts.map((p, i) => (
+                <circle key={i} cx={sx(p.x)} cy={sy(p.z)} r="4"
+                  fill={i === 0 ? '#14805f' : '#e05a10'} />
+              ))}
+              {routePts.length >= 2 && (
+                <text x={sx(routePts[routePts.length - 1].x) + 8}
+                  y={sy(routePts[routePts.length - 1].z) - 8}
+                  fontSize="12" fontWeight="700"
+                  fill={routeLen > 35 ? '#c3372c' : '#1c2a31'}>
+                  🚪 {fmtLength(routeLen, unitSys)} {routeLen > 35 ? '✗ >35 m (VKF)' : '✓ ≤35 m'}
+                </text>
+              )}
+            </g>
+          )}
           {wallLabels.map((w, i) => (
             <g key={`wall${i}`}>
               <circle cx={sx(w.mid.x)} cy={sy(w.mid.z)} r="3" fill="#b3261e" />

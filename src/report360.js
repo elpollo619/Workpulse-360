@@ -83,6 +83,8 @@ function buildReportHTML(store, roomNames = {}, opts = {}, autoPrint = true) {
 
   let totalArea = 0
   let totalVolume = 0
+  let totalCost = 0
+  const prices = opts.prices ?? {}
   const sections = rooms.map(([photo, ms]) => {
     const name = roomNames[photo] || photo
     const areas = ms.filter((m) => m.mode === 'area')
@@ -160,6 +162,20 @@ function buildReportHTML(store, roomNames = {}, opts = {}, autoPrint = true) {
         `diagonal <b>${fmtArea(roomArea * 1.2, u)}</b> (+20 %) · ` +
         `espiga <b>${fmtArea(roomArea * 1.25, u)}</b> (+25 %)`)
     }
+    // Presupuesto con los precios del usuario (CHF/m²): pintura sobre
+    // paredes netas + techo, suelo con +10 % de merma.
+    let roomCost = 0
+    if (prices.paint > 0 && wallArea != null) {
+      const c = ((netWall ?? wallArea) + roomArea) * prices.paint
+      roomCost += c
+      stats.push(`Pintura ≈ <b>CHF ${c.toFixed(0)}</b> <small>(${prices.paint}/m²)</small>`)
+    }
+    if (prices.floor > 0 && roomArea > 0) {
+      const c = roomArea * 1.1 * prices.floor
+      roomCost += c
+      stats.push(`Suelo ≈ <b>CHF ${c.toFixed(0)}</b> <small>(${prices.floor}/m², +10 % merma)</small>`)
+    }
+    totalCost += roomCost
     // Acústica estimada (Sabine): RT60 = 0.161·V/A, con absorción típica de
     // sala vacía de superficies duras. Orientativo para hi-fi/oficina en casa.
     if (volume != null && wallArea != null) {
@@ -266,7 +282,7 @@ function buildReportHTML(store, roomNames = {}, opts = {}, autoPrint = true) {
 </style></head><body>
 <h1>Workpulse 360 — Informe de medición</h1>
 <div class="sub">Generado: ${new Date().toLocaleString('es-CH')} · ${rooms.length} espacio(s)</div>
-${totalArea > 0 ? `<div class="total"><b>Superficie total medida: ${fmtArea(totalArea, u)}</b>${totalVolume > 0 ? ` · Volumen total (tipo GV: GF × altura): ${fmtVolume(totalVolume, u)}` : ''}</div>` : ''}
+${totalArea > 0 ? `<div class="total"><b>Superficie total medida: ${fmtArea(totalArea, u)}</b>${totalVolume > 0 ? ` · Volumen total (tipo GV: GF × altura): ${fmtVolume(totalVolume, u)}` : ''}${totalCost > 0 ? ` · <b>Presupuesto estimado: CHF ${totalCost.toFixed(0)}</b>` : ''}</div>` : ''}
 ${siaBlock}
 ${sections}
 ${(() => {

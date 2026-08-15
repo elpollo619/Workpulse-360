@@ -18,6 +18,7 @@ const UNITS_KEY = 'workpulse360.units.v1'
 const TYPES_KEY = 'workpulse360.roomtypes.v1'
 const WEIGHTS_KEY = 'workpulse360.weights.v1'
 const LEVEL_KEY = 'workpulse360.level.v1'
+const PRICES_KEY = 'workpulse360.prices.v1'
 
 const DEFAULT_WEIGHTS = { BALKON: 0.5, TERRASSE: 1 / 3, GARTEN: 0.1 }
 
@@ -43,6 +44,7 @@ export default function App360() {
   const [roomTypes, setRoomTypes] = useState(() => loadJSON(TYPES_KEY)) // { [photoName]: 'HNF' }
   const [weights, setWeights] = useState(() => ({ ...DEFAULT_WEIGHTS, ...loadJSON(WEIGHTS_KEY) }))
   const [levels, setLevels] = useState(() => loadJSON(LEVEL_KEY)) // { [photoName]: {pitch, roll} }
+  const [prices, setPrices] = useState(() => ({ paint: 0, floor: 0, ...loadJSON(PRICES_KEY) })) // CHF/m²
   const [unitSys, setUnitSys] = useState(() => localStorage.getItem(UNITS_KEY) || 'm')
   const [showPlan, setShowPlan] = useState(false)
   const [showAssembly, setShowAssembly] = useState(false)
@@ -73,6 +75,9 @@ export default function App360() {
   useEffect(() => {
     localStorage.setItem(LEVEL_KEY, JSON.stringify(levels))
   }, [levels])
+  useEffect(() => {
+    localStorage.setItem(PRICES_KEY, JSON.stringify(prices))
+  }, [prices])
 
   // Restaurar las fotos guardadas en IndexedDB (la sesión sobrevive recargas).
   useEffect(() => {
@@ -331,7 +336,7 @@ export default function App360() {
   }
 
   function buildShareableReport() {
-    return getSessionReportHTML(store, roomNames, { unitSys, roomTypes, weights, camHeights, levels })
+    return getSessionReportHTML(store, roomNames, { unitSys, roomTypes, weights, camHeights, levels, prices })
   }
 
   if (active) {
@@ -477,8 +482,8 @@ export default function App360() {
         <div className="toolgroup">
           <span className="toolgroup-label">Planos e informes</span>
           <div className="tools">
-            <button onClick={() => openSessionReport(store, roomNames, { unitSys, roomTypes, weights, camHeights, levels })}>🖨️ Informe (PDF)</button>
-            <button onClick={() => downloadSessionReport(store, roomNames, { unitSys, roomTypes, weights, camHeights, levels })}
+            <button onClick={() => openSessionReport(store, roomNames, { unitSys, roomTypes, weights, camHeights, levels, prices })}>🖨️ Informe (PDF)</button>
+            <button onClick={() => downloadSessionReport(store, roomNames, { unitSys, roomTypes, weights, camHeights, levels, prices })}
               title="Informe como archivo HTML autónomo (se abre en cualquier navegador)">📑 Informe HTML</button>
             {typeof navigator !== 'undefined' && !!navigator.canShare && (
               <button onClick={shareReport} title="Enviar el informe por WhatsApp, correo…">📤 Compartir</button>
@@ -535,6 +540,22 @@ export default function App360() {
           mide esa zona como área y renómbrala con la palabra
           «descuento» o «pendiente» — se restará automáticamente.
         </p>
+        <div className="row small" style={{ gap: 12, flexWrap: 'wrap' }}>
+          <b>Presupuesto (CHF/m²):</b>
+          {[['paint', 'Pintura'], ['floor', 'Suelo']].map(([id, label]) => (
+            <label key={id} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+              {label}
+              <input
+                type="number" min="0" step="1"
+                value={prices[id] || ''}
+                placeholder="0"
+                onChange={(e) => setPrices((prev) => ({ ...prev, [id]: Math.max(0, parseFloat(e.target.value) || 0) }))}
+                style={{ width: 70 }}
+                title="Tu precio por m². Con un valor > 0, el informe añade el coste estimado por habitación y el total"
+              />
+            </label>
+          ))}
+        </div>
         <div className="row small" style={{ gap: 12, flexWrap: 'wrap' }}>
           <b>Pesos de tasación:</b>
           {['BALKON', 'TERRASSE', 'GARTEN'].map((id) => (
