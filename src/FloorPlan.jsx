@@ -8,7 +8,7 @@ import { downloadDXF } from './dxf.js'
  */
 export default function FloorPlan({ measurements, photoName, roomName, unitSys = 'm', onClose }) {
   const svgString = useMemo(
-    () => buildPlanSVG(measurements, { title: roomName || photoName, unitSys }),
+    () => buildPlanSVG(measurements, { title: roomName || photoName, unitSys, dark: false }),
     [measurements, roomName, photoName, unitSys]
   )
   const baseName = (roomName || photoName || 'plano').replace(/\.[^.]+$/, '')

@@ -1,58 +1,69 @@
 /* ============================================================
-   Workpulse 360 — sistema de diseño
-   Tema oscuro único y deliberado: la app es un visor fotográfico
-   que se usa en obra; el fondo pizarra mantiene el foco en la
-   panorámica y hereda la identidad de la familia Workpulse
-   (esmeralda #34d399 sobre pizarra azulada).
+   Workpulse 360 — «Instrumento suizo sobre papel técnico»
+   Estudio (inicio, planos): papel milimetrado claro + tinta
+   petróleo + naranja de instrumento topográfico.
+   Visor (medición): óptica oscura de instrumento con lecturas
+   monoespaciadas y retícula naranja.
+   Tipos: IBM Plex Sans Condensed (titulares) · IBM Plex Mono
+   (valores) · system-ui (texto corrido), autoalojadas.
    ============================================================ */
 
 :root {
-  /* Superficies (de fondo a elevado) */
-  --bg0: #0b1014;
-  --bg1: #131b23;
-  --bg2: #1c2732;
-  --bg3: #253240;
-  --line: #273543;
-  --line-2: #33455a;
+  /* Papel de dibujo técnico */
+  --paper: #edefe9;
+  --paper-2: #f7f8f4;
+  --grid-minor: rgba(66, 199, 138, 0.07);
+  --grid-major: rgba(53, 116, 92, 0.12);
 
-  /* Texto */
-  --text: #e9eff5;
-  --muted: #93a3b1;
+  /* Tinta */
+  --ink: #1c2a31;
+  --ink-2: #54656f;
+  --line: #c3ccc6;
+  --line-ink: #94a29c;
 
-  /* Marca Workpulse */
-  --brand: #34d399;
-  --brand-press: #1f8f6a;
-  --brand-ink: #052e1f;
-  --brand-soft: rgba(52, 211, 153, 0.12);
+  /* Naranja de instrumento (estación total) */
+  --orange: #e05a10;
+  --orange-deep: #b74809;
+  --orange-ink: #ffffff;
 
-  /* Semánticos (independientes del acento) */
-  --ok: #34d399;
-  --warn: #f5b04b;
-  --danger: #f87171;
-  --info: #58a6f2;
+  /* Esmeralda Workpulse: el color del dato medido */
+  --measure: #14805f;
 
-  /* Forma y sombra */
-  --r-s: 8px;
-  --r-m: 12px;
-  --r-l: 16px;
-  --shadow-1: 0 2px 10px rgba(0, 0, 0, 0.35);
-  --shadow-2: 0 8px 28px rgba(0, 0, 0, 0.5);
+  /* Semánticos */
+  --ok: #17836a;
+  --warn: #b07908;
+  --danger: #c3372c;
+  --info: #2867a8;
 
-  /* Barra flotante translúcida */
-  --glass: rgba(15, 21, 27, 0.88);
+  /* Óptica del visor (oscuro) */
+  --optic-0: #0d1216;
+  --optic-1: rgba(16, 22, 27, 0.93);
+  --optic-2: #1d272f;
+  --optic-line: #33424c;
+  --optic-text: #e9eff2;
+  --optic-muted: #90a0aa;
+
+  --font-display: 'IBM Plex Sans Condensed', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --r: 3px;
+  --shadow-print: 3px 3px 0 rgba(28, 42, 49, 0.16);
 }
 
 * { box-sizing: border-box; }
 
-html, body, #root {
-  height: 100%;
-  margin: 0;
-}
+html, body, #root { height: 100%; margin: 0; }
 
 body {
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  color: var(--text);
-  background: var(--bg0);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: var(--ink);
+  /* Papel milimetrado: rejilla fina de 8px y mayor de 40px */
+  background:
+    repeating-linear-gradient(0deg, var(--grid-minor) 0 1px, transparent 1px 8px),
+    repeating-linear-gradient(90deg, var(--grid-minor) 0 1px, transparent 1px 8px),
+    repeating-linear-gradient(0deg, var(--grid-major) 0 1px, transparent 1px 40px),
+    repeating-linear-gradient(90deg, var(--grid-major) 0 1px, transparent 1px 40px),
+    var(--paper);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -60,49 +71,54 @@ body {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
 
-/* ---------- Controles base ---------- */
+/* ---------- Controles base (contexto papel) ---------- */
 
 button,
 select,
 input[type='number'],
 input[type='text'] {
-  font: inherit;
-  font-size: 13px;
-  color: var(--text);
-  background: var(--bg2);
-  border: 1px solid var(--line);
-  border-radius: var(--r-s);
-  padding: 7px 11px;
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--paper-2);
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r);
+  padding: 7px 12px;
   min-height: 34px;
 }
+input[type='number'] { font-family: var(--font-mono); font-weight: 500; }
 
 button {
   cursor: pointer;
-  transition: background 0.12s, border-color 0.12s, transform 0.06s;
+  transition: background 0.1s, color 0.1s, transform 0.05s, box-shadow 0.1s;
 }
-button:hover { background: var(--bg3); border-color: var(--line-2); }
-button:active { transform: translateY(1px); }
-button:disabled { opacity: 0.45; cursor: default; transform: none; }
+button:hover { background: var(--ink); color: var(--paper-2); }
+button:active { transform: translate(1px, 1px); }
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+  transform: none;
+}
+button:disabled:hover { background: var(--paper-2); color: var(--ink); }
 button.active {
-  background: var(--brand);
-  border-color: var(--brand);
-  color: var(--brand-ink);
-  font-weight: 600;
+  background: var(--orange);
+  border-color: var(--orange-deep);
+  color: var(--orange-ink);
 }
 
 :focus-visible {
-  outline: 2px solid var(--brand);
+  outline: 2.5px solid var(--orange);
   outline-offset: 2px;
-  border-radius: var(--r-s);
 }
 
-.val, .pano360-msg, input[type='number'] { font-variant-numeric: tabular-nums; }
+.val { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 
 .del {
   background: transparent;
   border: none;
   min-height: 0;
-  color: var(--muted);
+  color: var(--ink-2);
   padding: 2px 6px;
 }
 .del:hover { background: transparent; color: var(--danger); }
@@ -110,70 +126,98 @@ button.active {
 .hint {
   font-size: 12px;
   line-height: 1.55;
-  color: var(--muted);
+  color: var(--ink-2);
   margin: 2px 0 0;
 }
 
 .row { display: flex; gap: 8px; align-items: center; }
-.row.small { font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+.row.small { font-size: 12px; color: var(--ink-2); flex-wrap: wrap; }
 
 /* ============================================================
-   Pantalla de inicio
+   Hoja de inicio (estilo lámina técnica)
    ============================================================ */
 
 .app360-landing {
   min-height: 100%;
-  max-width: 620px;
+  max-width: 680px;
   margin: 0 auto;
-  padding: 56px 22px 36px;
+  padding: 40px 22px 36px;
   display: flex;
   flex-direction: column;
-  gap: 26px;
+  gap: 24px;
 }
 
+/* Cajetín de plano */
+.brand {
+  border: 2px solid var(--ink);
+  background: var(--paper-2);
+  box-shadow: var(--shadow-print);
+  padding: 0;
+  overflow: hidden;
+}
 .brand h1 {
   margin: 0;
-  font-size: 32px;
+  padding: 18px 20px 12px;
+  font-family: var(--font-display);
+  font-size: 44px;
   font-weight: 700;
-  letter-spacing: -0.02em;
-  text-wrap: balance;
-}
-.brand h1 span { color: var(--brand); margin-left: 5px; }
-.brand p {
-  margin: 6px 0 0;
-  font-size: 15px;
-  color: var(--muted);
-}
-
-/* CTA principal: la única acción imprescindible */
-.filebtn {
-  display: block;
-  text-align: center;
-  cursor: pointer;
-  border-radius: var(--r-m);
-  transition: filter 0.12s, transform 0.06s;
-}
-.filebtn:active { transform: translateY(1px); }
-.app360-open {
-  background: var(--brand);
-  color: var(--brand-ink);
-  font-size: 17px;
-  font-weight: 650;
-  padding: 18px;
-  border: none;
-  box-shadow: var(--shadow-1);
-}
-.app360-open:hover { filter: brightness(1.06); }
-
-/* Sesión actual: tarjetas de espacios */
-.app360-rooms { display: flex; flex-direction: column; gap: 10px; }
-.app360-rooms b {
-  font-size: 11px;
-  font-weight: 650;
+  line-height: 0.95;
+  letter-spacing: 0.01em;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
+  border-bottom: 1.5px solid var(--ink);
 }
+.brand h1 span { color: var(--orange); }
+.brand p {
+  margin: 0;
+  padding: 9px 20px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  color: var(--ink-2);
+}
+
+/* Acción principal */
+.filebtn { display: block; text-align: center; cursor: pointer; }
+.app360-open {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--orange-ink);
+  background: var(--orange);
+  border: 2px solid var(--ink);
+  border-radius: var(--r);
+  padding: 18px;
+  box-shadow: var(--shadow-print);
+  transition: transform 0.06s, box-shadow 0.06s, filter 0.1s;
+}
+.app360-open:hover { filter: brightness(1.07); }
+.app360-open:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 rgba(28, 42, 49, 0.16); }
+
+/* Rótulos de sección como cotas: |——— TEXTO ———| */
+.app360-rooms b,
+.toolgroup-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink);
+}
+.app360-rooms b::before, .app360-rooms b::after,
+.toolgroup-label::before, .toolgroup-label::after {
+  content: '';
+  height: 1.5px;
+  background: var(--line-ink);
+  flex: 1;
+}
+.app360-rooms b::before, .toolgroup-label::before { max-width: 26px; flex: none; width: 26px; }
+
+.app360-rooms { display: flex; flex-direction: column; gap: 10px; }
 .list {
   list-style: none;
   margin: 0;
@@ -186,17 +230,19 @@ button.active {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: var(--bg1);
-  border: 1px solid var(--line);
-  border-radius: var(--r-m);
-  padding: 12px 14px;
+  background: var(--paper-2);
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r);
+  border-left: 6px solid var(--measure);
+  padding: 11px 14px;
   font-size: 14px;
-  transition: border-color 0.12s, background 0.12s;
+  box-shadow: var(--shadow-print);
+  transition: border-left-color 0.1s;
 }
-.list li:hover { border-color: var(--brand-press); background: var(--bg2); }
+.list li:hover { border-left-color: var(--orange); }
 .mrow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* Cómo funciona: secuencia real 1→2→3, numerada con contador */
+/* Pasos: cadena de cota vertical */
 .app360-steps {
   list-style: none;
   counter-reset: paso;
@@ -204,69 +250,83 @@ button.active {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
 }
 .app360-step {
   counter-increment: paso;
   position: relative;
-  background: var(--bg1);
-  border: 1px solid var(--line);
-  border-radius: var(--r-m);
-  padding: 14px 16px 14px 58px;
+  background: var(--paper-2);
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r);
+  padding: 14px 16px 14px 62px;
   font-size: 13.5px;
 }
-.app360-step::before {
-  content: counter(paso);
+li.app360-step + li.app360-step { margin-top: 14px; }
+/* Conector de cota entre pasos */
+li.app360-step + li.app360-step::after {
+  content: '';
   position: absolute;
-  left: 16px;
-  top: 14px;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--brand-soft);
-  color: var(--brand);
-  font-weight: 700;
-  font-size: 14px;
+  left: 30px;
+  top: -15.5px;
+  height: 14px;
+  width: 1.5px;
+  background: var(--line-ink);
+}
+.app360-step::before {
+  content: counter(paso, decimal-leading-zero);
+  position: absolute;
+  left: 14px;
+  top: 13px;
+  width: 32px;
+  height: 26px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r);
+  background: var(--paper);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 13px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.app360-step b { color: var(--text); font-weight: 650; }
-.app360-step p { margin: 4px 0 0; color: var(--muted); line-height: 1.6; }
+.app360-step b {
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 13.5px;
+}
+.app360-step p { margin: 5px 0 0; color: var(--ink-2); line-height: 1.6; }
 
-/* El panel de normas reutiliza la tarjeta, sin número */
 details.app360-step { counter-increment: none; padding-left: 16px; }
 details.app360-step::before { content: none; }
-details.app360-step summary { cursor: pointer; font-size: 13.5px; }
+details.app360-step summary {
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13.5px;
+}
 details.app360-step p { margin-top: 10px; }
 
-/* Herramientas agrupadas con rótulo */
-.toolgroup { display: flex; flex-direction: column; gap: 8px; }
-.toolgroup-label {
-  font-size: 11px;
-  font-weight: 650;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-}
+.toolgroup { display: flex; flex-direction: column; gap: 9px; }
 .tools { display: flex; flex-wrap: wrap; gap: 8px; }
-.tools button { flex: 1 1 auto; min-width: 120px; }
+.tools button { flex: 1 1 auto; min-width: 128px; }
 
 .app360-note { font-size: 12px; }
 
 .app360-foot {
   margin-top: auto;
-  padding-top: 20px;
-  border-top: 1px solid var(--line);
-  color: var(--muted);
-  font-size: 13px;
+  padding-top: 18px;
+  border-top: 1.5px solid var(--ink);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
   text-align: center;
 }
-.app360-foot a { color: var(--brand); text-decoration: none; }
-.app360-foot a:hover { text-decoration: underline; }
+.app360-foot a { color: var(--orange-deep); }
 
 /* ============================================================
-   Visor 360
+   Visor 360 (óptica de instrumento)
    ============================================================ */
 
 .app360-stage { position: fixed; inset: 0; }
@@ -277,10 +337,27 @@ details.app360-step p { margin-top: 10px; }
   inset: 0;
   z-index: 1300;
   background: #000;
+  color: var(--optic-text);
 }
 .pano360-canvas { position: absolute; inset: 0; }
 
-/* Barra superior: fila de modos + fila de contexto/utilidades */
+/* Chrome oscuro del visor: controles propios */
+.pano360 button,
+.pano360 select,
+.pano360 input[type='number'] {
+  color: var(--optic-text);
+  background: var(--optic-2);
+  border: 1px solid var(--optic-line);
+  font-weight: 600;
+}
+.pano360 button:hover { background: var(--optic-line); color: var(--optic-text); }
+.pano360 button.active {
+  background: var(--orange);
+  border-color: var(--orange);
+  color: var(--orange-ink);
+}
+.pano360 button:disabled:hover { background: var(--optic-2); color: var(--optic-text); }
+
 .pano360-top {
   position: absolute;
   top: 10px;
@@ -290,13 +367,13 @@ details.app360-step p { margin-top: 10px; }
   display: flex;
   flex-direction: column;
   gap: 6px;
-  background: var(--glass);
+  background: var(--optic-1);
   backdrop-filter: blur(8px);
-  border: 1px solid var(--line);
-  border-radius: var(--r-l);
+  border: 1px solid var(--optic-line);
+  border-top: 3px solid var(--orange);
+  border-radius: 4px;
   padding: 8px;
   font-size: 12px;
-  box-shadow: var(--shadow-2);
 }
 .tb-row {
   display: flex;
@@ -305,20 +382,14 @@ details.app360-step p { margin-top: 10px; }
   flex-wrap: wrap;
   justify-content: center;
 }
-.tb-sep {
-  width: 1px;
-  align-self: stretch;
-  margin: 2px 2px;
-  background: var(--line);
-}
+.tb-sep { width: 1px; align-self: stretch; margin: 2px 2px; background: var(--optic-line); }
 
-/* Modos como control segmentado */
 .pano360-modes {
   display: flex;
-  gap: 4px;
-  background: var(--bg1);
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  gap: 3px;
+  background: var(--optic-0);
+  border: 1px solid var(--optic-line);
+  border-radius: 4px;
   padding: 3px;
 }
 .pano360-modes button {
@@ -326,42 +397,43 @@ details.app360-step p { margin-top: 10px; }
   background: transparent;
   min-height: 30px;
   padding: 5px 10px;
-  border-radius: 7px;
+  border-radius: 2px;
   white-space: nowrap;
+  font-family: var(--font-display);
 }
-.pano360-modes button:hover { background: var(--bg3); }
-.pano360-modes button.active {
-  background: var(--brand);
-  color: var(--brand-ink);
-}
+.pano360-modes button:hover { background: var(--optic-2); }
+.pano360-modes button.active { background: var(--orange); color: var(--orange-ink); }
 
-.pano360-top label { display: flex; align-items: center; gap: 5px; color: var(--muted); }
-.pano360-top input[type='number'] { width: 60px; min-height: 30px; padding: 4px 6px; }
+.pano360-top label { display: flex; align-items: center; gap: 5px; color: var(--optic-muted); }
+.pano360-top input[type='number'] { width: 62px; min-height: 30px; padding: 4px 6px; }
 .pano360-top select { min-height: 30px; padding: 4px 6px; max-width: 170px; }
 .pano360-top .tb-row button { min-height: 30px; padding: 5px 9px; }
 
-/* Mensaje de estado: la voz de la app */
+/* Lectura del instrumento */
 .pano360-msg {
+  pointer-events: none;
   position: absolute;
   bottom: 46px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--glass);
+  background: var(--optic-1);
   backdrop-filter: blur(8px);
-  border: 1px solid var(--brand-press);
-  border-radius: 22px;
-  padding: 9px 18px;
-  font-size: 14px;
+  border: 1px solid var(--optic-line);
+  border-left: 4px solid var(--orange);
+  border-radius: 4px;
+  padding: 9px 16px;
+  font-family: var(--font-mono);
+  font-size: 13px;
   max-width: calc(100% - 24px);
-  text-align: center;
-  box-shadow: var(--shadow-1);
+  text-align: left;
 }
 .pano360-hint {
+  pointer-events: none;
   position: absolute;
   bottom: 12px;
   left: 50%;
   transform: translateX(-50%);
-  color: var(--muted);
+  color: var(--optic-muted);
   font-size: 11px;
   white-space: nowrap;
   max-width: calc(100% - 24px);
@@ -369,31 +441,33 @@ details.app360-step p { margin-top: 10px; }
   text-overflow: ellipsis;
 }
 
-/* Panel de mediciones */
+/* Libreta de mediciones */
 .pano360-panel {
   position: absolute;
-  top: 108px;
+  top: 112px;
   right: 10px;
-  width: 250px;
-  max-height: calc(100% - 210px);
+  width: 258px;
+  max-height: calc(100% - 214px);
   overflow-y: auto;
-  background: var(--glass);
+  background: var(--optic-1);
   backdrop-filter: blur(8px);
-  border: 1px solid var(--line);
-  border-radius: var(--r-m);
+  border: 1px solid var(--optic-line);
+  border-radius: 4px;
   padding: 12px;
   font-size: 12.5px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  box-shadow: var(--shadow-2);
+  gap: 9px;
 }
 .pano360-panel > b {
-  font-size: 11px;
-  font-weight: 650;
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
+  letter-spacing: 0.12em;
+  color: var(--optic-muted);
+  border-bottom: 1px solid var(--optic-line);
+  padding-bottom: 7px;
 }
 .pano360-panel ul {
   list-style: none;
@@ -401,30 +475,26 @@ details.app360-step p { margin-top: 10px; }
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
 }
 .pano360-panel li {
   display: flex;
   align-items: center;
   gap: 7px;
-  background: var(--bg2);
-  border: 1px solid var(--line);
-  border-radius: var(--r-s);
-  padding: 7px 9px;
+  padding: 6px 2px;
+  border-bottom: 1px dashed var(--optic-line);
 }
 .pano360-panel li.empty {
-  background: none;
-  border: 1px dashed var(--line);
-  color: var(--muted);
+  border: none;
+  color: var(--optic-muted);
   justify-content: center;
   padding: 12px;
 }
 .pano360-panel .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
-.pano360-panel .lbl { font-weight: 650; }
-.pano360-panel .val { margin-left: auto; white-space: nowrap; color: var(--muted); }
-.pano360-panel .val:hover { color: var(--text); }
+.pano360-panel .lbl { font-family: var(--font-mono); font-weight: 500; }
+.pano360-panel .val { margin-left: auto; white-space: nowrap; color: var(--optic-muted); font-size: 12px; }
+.pano360-panel .val:hover { color: var(--optic-text); }
 
-/* Lupa de precisión */
+/* Lupa: retícula naranja */
 .pano360-loupe-frame {
   display: none;
   position: absolute;
@@ -432,79 +502,85 @@ details.app360-step p { margin-top: 10px; }
   bottom: 64px;
   width: 150px;
   height: 150px;
-  border: 2px solid var(--brand);
-  border-radius: var(--r-s);
+  border: 2px solid var(--orange);
+  border-radius: 2px;
   pointer-events: none;
-  box-shadow: var(--shadow-2);
 }
 .pano360-loupe-frame::after {
   content: '';
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   transform: translate(-50%, -50%);
   background:
-    linear-gradient(var(--brand), var(--brand)) center/1.5px 100% no-repeat,
-    linear-gradient(var(--brand), var(--brand)) center/100% 1.5px no-repeat;
+    linear-gradient(var(--orange), var(--orange)) center/1.5px 100% no-repeat,
+    linear-gradient(var(--orange), var(--orange)) center/100% 1.5px no-repeat;
 }
 .pano360.loupe-on .pano360-loupe-frame { display: block; }
 
-/* Panel de nivelación fina */
+/* Nivelación */
 .pano360-level {
   position: absolute;
-  top: 108px;
+  top: 112px;
   left: 10px;
-  width: 260px;
-  background: var(--glass);
+  width: 262px;
+  background: var(--optic-1);
   backdrop-filter: blur(8px);
-  border: 1px solid var(--line);
-  border-radius: var(--r-m);
+  border: 1px solid var(--optic-line);
+  border-radius: 4px;
   padding: 12px;
   font-size: 12.5px;
   display: flex;
   flex-direction: column;
   gap: 9px;
-  box-shadow: var(--shadow-2);
 }
 .pano360-level > b {
-  font-size: 11px;
-  font-weight: 650;
+  font-family: var(--font-display);
+  font-size: 11.5px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
+  letter-spacing: 0.12em;
+  color: var(--optic-muted);
 }
 .pano360-level label { display: flex; align-items: center; gap: 7px; }
-.pano360-level input[type='range'] { flex: 1; accent-color: var(--brand); }
-.pano360-level .val { min-width: 46px; text-align: right; color: var(--muted); }
+.pano360-level input[type='range'] { flex: 1; accent-color: var(--orange); }
+.pano360-level .val { min-width: 48px; text-align: right; color: var(--optic-muted); font-size: 12px; }
+.pano360-level .hint { color: var(--optic-muted); }
+.pano360-level button {
+  color: var(--optic-text);
+  background: var(--optic-2);
+  border: 1px solid var(--optic-line);
+}
 
 /* ============================================================
-   Plano de planta y plano general
+   Planos (láminas de papel sobre fondo atenuado)
    ============================================================ */
 
 .floorplan {
   position: absolute;
   inset: 0;
   z-index: 1400;
-  background: rgba(4, 8, 11, 0.78);
-  backdrop-filter: blur(4px);
+  background: rgba(13, 18, 22, 0.72);
+  backdrop-filter: blur(3px);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 14px;
 }
 .floorplan-card {
-  background: var(--bg1);
-  border: 1px solid var(--line);
-  border-radius: var(--r-l);
+  background: var(--paper-2);
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  border-radius: var(--r);
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.35);
   padding: 16px;
-  max-width: 760px;
+  max-width: 780px;
   width: 100%;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  box-shadow: var(--shadow-2);
 }
 .floorplan-head {
   display: flex;
@@ -513,18 +589,25 @@ details.app360-step p { margin-top: 10px; }
   gap: 10px;
   font-size: 14px;
   flex-wrap: wrap;
+  border-bottom: 1.5px solid var(--ink);
+  padding-bottom: 10px;
+}
+.floorplan-head b {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 .floorplan-head button { min-height: 30px; padding: 5px 10px; font-size: 12.5px; }
 .floorplan-svgwrap svg {
   width: 100%;
   height: auto;
-  border-radius: var(--r-s);
-  border: 1px solid var(--line);
+  border: 1.5px solid var(--ink);
   display: block;
 }
+.floorplan-card .hint { color: var(--ink-2); }
 
 /* ============================================================
-   Modo estéreo (dos panorámicas)
+   Modo estéreo
    ============================================================ */
 
 .stereo {
@@ -534,43 +617,51 @@ details.app360-step p { margin-top: 10px; }
   background: #000;
   display: flex;
   flex-direction: column;
+  color: var(--optic-text);
 }
 .stereo-bar {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
-  background: var(--bg1);
-  border-bottom: 1px solid var(--line);
+  background: var(--optic-1);
+  border-bottom: 3px solid var(--orange);
   font-size: 13px;
   flex-wrap: wrap;
 }
-.stereo-msg { flex: 1; min-width: 200px; }
+.stereo-bar b { font-family: var(--font-display); text-transform: uppercase; letter-spacing: 0.06em; }
+.stereo-bar button {
+  color: var(--optic-text);
+  background: var(--optic-2);
+  border: 1px solid var(--optic-line);
+}
+.stereo-bar button:hover { background: var(--optic-line); color: var(--optic-text); }
+.stereo-bar button.active { background: var(--orange); border-color: var(--orange); color: var(--orange-ink); }
+.stereo-msg { flex: 1; min-width: 200px; font-family: var(--font-mono); font-size: 12.5px; }
+.stereo-bar .hint { color: var(--optic-muted); }
 .stereo-panes { flex: 1; display: flex; gap: 2px; min-height: 0; }
 .stereo-col { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .stereo-label {
   padding: 4px 10px;
+  font-family: var(--font-display);
   font-size: 11px;
-  font-weight: 650;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-  background: var(--bg1);
+  letter-spacing: 0.12em;
+  color: var(--optic-muted);
+  background: var(--optic-1);
 }
-.stereo-pane { flex: 1; position: relative; opacity: 0.55; transition: opacity 0.15s; }
-.stereo-pane.active { opacity: 1; box-shadow: inset 0 0 0 2px var(--brand); }
+.stereo-pane { flex: 1; position: relative; opacity: 0.5; transition: opacity 0.15s; }
+.stereo-pane.active { opacity: 1; box-shadow: inset 0 0 0 2.5px var(--orange); }
 .stereo-pane canvas { display: block; }
-
-@media (max-width: 767px) {
-  .stereo-panes { flex-direction: column; }
-}
 
 /* ============================================================
    Móvil
    ============================================================ */
 
 @media (max-width: 767px) {
-  .app360-landing { padding-top: 36px; }
+  .app360-landing { padding-top: 24px; }
+  .brand h1 { font-size: 32px; }
 
   .pano360-top {
     top: 6px;
@@ -596,9 +687,11 @@ details.app360-step p { margin-top: 10px; }
     top: auto;
     bottom: 96px;
     right: 8px;
-    width: 200px;
+    width: 205px;
     max-height: 40%;
   }
-  .pano360-level { top: 128px; width: 230px; }
+  .pano360-level { top: 132px; width: 235px; }
   .pano360-hint { display: none; }
+
+  .stereo-panes { flex-direction: column; }
 }
