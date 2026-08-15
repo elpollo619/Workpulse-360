@@ -656,6 +656,131 @@ details.app360-step p { margin-top: 10px; }
 .stereo-pane canvas { display: block; }
 
 /* ============================================================
+   Modo en vivo (cámara del dispositivo + láser)
+   ============================================================ */
+
+.live {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  background: #000;
+  color: var(--optic-text);
+  display: flex;
+  flex-direction: column;
+}
+.live-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.live-error {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--optic-1);
+  border: 1px solid var(--optic-line);
+  border-left: 4px solid var(--danger);
+  border-radius: 4px;
+  padding: 12px 18px;
+  max-width: 90%;
+  font-size: 14px;
+}
+.live-hud {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  background: var(--optic-1);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--optic-line);
+  border-left: 5px solid var(--orange);
+  border-radius: 4px;
+  padding: 10px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.live-hud-label {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--optic-muted);
+}
+.live-hud-value {
+  font-family: var(--font-mono);
+  font-size: 34px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--orange);
+}
+.live-hud-frozen {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--optic-muted);
+}
+.live-bar {
+  position: absolute;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: calc(100% - 20px);
+}
+.live-bar button {
+  color: var(--optic-text);
+  background: var(--optic-1);
+  border: 1px solid var(--optic-line);
+  backdrop-filter: blur(6px);
+}
+.live-bar button.active { background: var(--orange); border-color: var(--orange); color: var(--orange-ink); }
+.live-note {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  color: var(--optic-muted);
+  font-size: 11px;
+  max-width: calc(100% - 24px);
+  text-align: center;
+  pointer-events: none;
+}
+
+/* Guía de primeros pasos del visor */
+.coach {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  width: min(400px, calc(100% - 32px));
+  background: var(--paper-2);
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  border-radius: var(--r);
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.4);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.coach b {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 15px;
+}
+.coach ol { margin: 0; padding-left: 20px; font-size: 13.5px; line-height: 1.65; }
+.coach ol b { font-size: 13.5px; letter-spacing: 0.02em; }
+.coach .hint { color: var(--ink-2); }
+
+/* ============================================================
    Móvil
    ============================================================ */
 

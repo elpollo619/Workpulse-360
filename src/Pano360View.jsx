@@ -126,6 +126,7 @@ export default function Pano360View({
   const markerTypeRef = useRef('enchufe')
   const [level, setLevel] = useState(initialLevel) // grados {pitch, roll}
   const [accessPoint, setAccessPoint] = useState(null) // {x,z} plantilla ♿
+  const [showCoach, setShowCoach] = useState(() => !localStorage.getItem('workpulse360.coach.v1'))
   const [levelOpen, setLevelOpen] = useState(false)
   const calibSamplesRef = useRef([]) // muestras {h, w} de calibración
   const imgWRef = useRef(0) // ancho en píxeles de la foto (para la incertidumbre)
@@ -1014,6 +1015,15 @@ export default function Pano360View({
               onChange={(e) => setCamHeight(parseFloat(e.target.value) || 1.6)}
             /> m
           </label>
+          {laser && laserReading != null && (
+            <button onClick={() => {
+              setCamHeight(Math.round(laserReading * 1000) / 1000)
+              setMessage(`📷 Altura de cámara fijada desde el láser: ${laserReading.toFixed(3)} m. (Apunta el láser del objetivo de la cámara al suelo, en vertical.)`)
+            }}
+              title="Fijar la altura de cámara con el láser: apoya el Bosch junto al objetivo de la cámara, apunta al suelo en vertical y pulsa aquí">
+              ⤓ {laserReading.toFixed(2)}
+            </button>
+          )}
           <select value={unitSys} onChange={(e) => onUnitSys?.(e.target.value)} title="Unidades">
             {UNIT_SYSTEMS.map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}
           </select>
@@ -1113,6 +1123,27 @@ export default function Pano360View({
             </label>
           ))}
           <button onClick={() => setLevel({ pitch: 0, roll: 0 })}>Reiniciar</button>
+        </div>
+      )}
+
+      {showCoach && (
+        <div className="coach">
+          <b>Así se mide en 3 pasos</b>
+          <ol>
+            <li><b>Calibra una vez por foto:</b> conecta el láser (🔗), apúntalo
+              de la cámara al suelo y pulsa «⤓» — o usa 🎯/🚪 con una distancia
+              o puerta conocida.</li>
+            <li><b>Elige un modo</b> arriba (📏 distancia, 📐 área, 📊 altura…) y
+              <b> toca los puntos en la foto</b> — para suelos, toca siempre el
+              suelo; la lupa te ayuda a afinar.</li>
+            <li><b>Todo se guarda solo:</b> panel derecho, 🗺️ plano con cotas e
+              informe desde la pantalla de inicio.</li>
+          </ol>
+          <span className="hint">Arrastra para mirar alrededor · rueda o pellizco para acercar.</span>
+          <button className="active" onClick={() => {
+            localStorage.setItem('workpulse360.coach.v1', '1')
+            setShowCoach(false)
+          }}>Entendido, a medir</button>
         </div>
       )}
 

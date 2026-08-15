@@ -3,6 +3,7 @@ import Pano360View from './Pano360View.jsx'
 import FloorPlan from './FloorPlan.jsx'
 import PlanAssembly from './PlanAssembly.jsx'
 import StereoMode from './StereoMode.jsx'
+import LiveMode from './LiveMode.jsx'
 import { openSessionReport, downloadSessionReport, getSessionReportHTML } from './report360.js'
 import { savePhoto, listPhotos, deletePhoto } from './photostore.js'
 import { fmtArea } from './units.js'
@@ -46,6 +47,7 @@ export default function App360() {
   const [showPlan, setShowPlan] = useState(false)
   const [showAssembly, setShowAssembly] = useState(false)
   const [showStereo, setShowStereo] = useState(false)
+  const [showLive, setShowLive] = useState(false)
   const [restoring, setRestoring] = useState(true)
   const importRef = useRef(null)
 
@@ -419,6 +421,10 @@ export default function App360() {
         📷 Abrir fotos 360° y medir
         <input type="file" accept="image/jpeg,image/png" multiple hidden onChange={onFiles} />
       </label>
+      <button onClick={() => setShowLive(true)}
+        title="Cámara del dispositivo en vivo con la lectura del láser superpuesta; captura fotos-evidencia con la medida estampada">
+        🎥 En vivo · cámara + láser
+      </button>
 
       {photos.length > 0 && (
         <section className="app360-rooms">
@@ -555,6 +561,7 @@ export default function App360() {
         ¿Mediciones de terreno con drone? → <a href="../">Workpulse Drohne 🚁</a>
       </footer>
 
+      {showLive && <LiveMode onClose={() => setShowLive(false)} />}
       {showStereo && (
         <StereoMode
           photos={photos}
