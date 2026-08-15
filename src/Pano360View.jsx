@@ -17,6 +17,7 @@ const MODES = [
   { id: 'slope', label: '⛰️ Pendiente', hint: 'Ángulo de techo inclinado: PIE y TOPE del punto BAJO, luego PIE y TOPE del punto ALTO' },
   { id: 'note', label: '📝 Nota', hint: 'Toca cualquier punto para anclar una nota (defecto, material, recordatorio…)' },
   { id: 'marker', label: '🔌 Elemento', hint: 'Instalación eléctrica: elige el tipo y toca el SUELO justo bajo el elemento — aparecerá en el plano con su posición' },
+  { id: 'access', label: '♿ SIA 500', hint: 'Toca el SUELO para proyectar el círculo de giro de silla de ruedas (Ø 1.50 m) y el área de maniobra 1.40 × 1.70 m — comprueba holguras a ojo contra muebles y paredes' },
   { id: 'calibrate', label: '🎯 Calibrar', hint: 'Toca 2 puntos del suelo con distancia CONOCIDA (p. ej. una baldosa o un metro plegable)' },
   { id: 'calibv', label: '🚪 Puerta', hint: 'Calibrar con altura conocida: toca el PIE y el TOPE de una puerta (CH ≈ 2.10 m; stock antiguo 2.00) u otra referencia' },
 ]
@@ -124,6 +125,7 @@ export default function Pano360View({
   const [markerType, setMarkerType] = useState('enchufe')
   const markerTypeRef = useRef('enchufe')
   const [level, setLevel] = useState(initialLevel) // grados {pitch, roll}
+  const [accessPoint, setAccessPoint] = useState(null) // {x,z} plantilla ♿
   const [levelOpen, setLevelOpen] = useState(false)
   const calibSamplesRef = useRef([]) // muestras {h, w} de calibración
   const imgWRef = useRef(0) // ancho en píxeles de la foto (para la incertidumbre)
@@ -145,6 +147,7 @@ export default function Pano360View({
   useEffect(() => {
     modeRef.current = mode
     setTaps([])
+    if (mode !== 'access') setAccessPoint(null)
     setMessage(MODES.find((m) => m.id === mode)?.hint ?? '')
   }, [mode])
 
@@ -714,6 +717,10 @@ export default function Pano360View({
       } else if (m === 'marker') {
         if (!fp) { setMessage('⚠️ Toca el SUELO justo bajo el elemento (su vertical).'); return }
         apiRef.current.saveMarker(tap)
+      } else if (m === 'access') {
+        if (!fp) { setMessage('⚠️ La plantilla se proyecta sobre el SUELO. Apunta más abajo.'); return }
+        setAccessPoint({ x: fp.x, z: fp.z })
+        setMessage('♿ Círculo Ø 1.50 m + maniobra 1.40 × 1.70 m (SIA 500). Si cabe sin tocar muebles ni paredes, la holgura cumple. Toca en otro sitio para moverla.')
       } else {
         // height / calibración vertical: pie en el suelo + tope a plomada
         if (prev.length === 0) {
@@ -919,6 +926,40 @@ export default function Pano360View({
       ))
     }
 
+    // Plantilla de accesibilidad SIA 500 proyectada sobre el plano del suelo:
+    // círculo de giro Ø 1.50 m + rectángulo de maniobra 1.40 × 1.70 m.
+    if (accessPoint) {
+      const h = camHeightRef.current
+      const proj = (x, z) => new THREE.Vector3(x, -h, z).normalize().multiplyScalar(47.5)
+      const ring = []
+      for (let i = 0; i <= 48; i++) {
+        const a = (i / 48) * Math.PI * 2
+        ring.push(proj(accessPoint.x + Math.cos(a) * 0.75, accessPoint.z + Math.sin(a) * 0.75))
+      }
+      draftGroup.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(ring),
+        new THREE.LineBasicMaterial({ color: 0x58a6f2 })
+      ))
+      const rectPts = [[-0.7, -0.85], [0.7, -0.85], [0.7, 0.85], [-0.7, 0.85], [-0.7, -0.85]]
+      const rect = []
+      for (let i = 1; i < rectPts.length; i++) {
+        for (let t = 0; t <= 8; t++) {
+          const k = t / 8
+          rect.push(proj(
+            accessPoint.x + rectPts[i - 1][0] + (rectPts[i][0] - rectPts[i - 1][0]) * k,
+            accessPoint.z + rectPts[i - 1][1] + (rectPts[i][1] - rectPts[i - 1][1]) * k
+          ))
+        }
+      }
+      draftGroup.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(rect),
+        new THREE.LineBasicMaterial({ color: 0x58a6f2, transparent: true, opacity: 0.6 })
+      ))
+      const label = makeLabelSprite('♿ Ø 1.50 m · 1.40 × 1.70 m', '#58a6f2')
+      label.position.copy(proj(accessPoint.x, accessPoint.z).normalize().multiplyScalar(44))
+      draftGroup.add(label)
+    }
+
     if (taps.length === 0) return
     if (keepMsgRef.current) { keepMsgRef.current = false; return }
     const floorPts = taps.filter((t) => t.fp).map((t) => t.fp)
@@ -945,7 +986,7 @@ export default function Pano360View({
       ]
       setMessage(msgs[taps.length] ?? '')
     }
-  }, [taps, mode, unitSys])
+  }, [taps, mode, unitSys, accessPoint])
 
   return (
     <div className="pano360">

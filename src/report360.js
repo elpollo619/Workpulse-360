@@ -160,6 +160,15 @@ function buildReportHTML(store, roomNames = {}, opts = {}, autoPrint = true) {
         `diagonal <b>${fmtArea(roomArea * 1.2, u)}</b> (+20 %) · ` +
         `espiga <b>${fmtArea(roomArea * 1.25, u)}</b> (+25 %)`)
     }
+    // Acústica estimada (Sabine): RT60 = 0.161·V/A, con absorción típica de
+    // sala vacía de superficies duras. Orientativo para hi-fi/oficina en casa.
+    if (volume != null && wallArea != null) {
+      const absorption = roomArea * 0.05 + roomArea * 0.1 + wallArea * 0.05 // suelo+techo+paredes
+      if (absorption > 0) {
+        const rt60 = (0.161 * volume) / absorption
+        stats.push(`Acústica RT60 ≈ <b>${rt60.toFixed(1)} s</b> <small>(sala vacía, superficies duras — Sabine)</small>`)
+      }
+    }
     // Recuento de elementos de instalación (quantity takeoff eléctrico).
     const markers = ms.filter((m) => m.mode === 'marker')
     if (markers.length) {

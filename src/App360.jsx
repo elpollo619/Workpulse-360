@@ -196,6 +196,39 @@ export default function App360() {
     trigger(blob, 'workpulse360-mediciones.csv')
   }
 
+  // Raumbuch (libro de habitaciones, práctica de facility management):
+  // una fila estructurada por espacio con sus magnitudes y equipamiento.
+  function exportRaumbuch() {
+    const rows = [[
+      'foto', 'espacio', 'tipo_sia416', 'superficie_m2', 'perimetro_m',
+      'altura_media_m', 'volumen_m3', 'elementos', 'notas',
+    ]]
+    for (const [photo, ms] of Object.entries(store)) {
+      if (!ms.length) continue
+      const areas = ms.filter((m) => m.mode === 'area')
+      const heights = ms.filter((m) => m.mode === 'height')
+      const area = areas.reduce((s, m) => s + m.value, 0)
+      const per = areas.reduce((s, m) => s + (m.perimeter ?? 0), 0)
+      const avgH = heights.length ? heights.reduce((s, m) => s + m.value, 0) / heights.length : null
+      const markers = ms.filter((m) => m.mode === 'marker')
+      const byKind = {}
+      for (const m of markers) byKind[m.text] = (byKind[m.text] ?? 0) + 1
+      const notes = ms.filter((m) => m.mode === 'note').map((m) => m.text).join(' | ')
+      rows.push([
+        photo, roomNames[photo] ?? '', roomTypes[photo] ?? DEFAULT_TYPE,
+        area ? area.toFixed(2) : '', per ? per.toFixed(2) : '',
+        avgH ? avgH.toFixed(2) : '', area && avgH ? (area * avgH).toFixed(2) : '',
+        Object.entries(byKind).map(([k, n]) => `${n}x ${k}`).join('; '),
+        notes,
+      ])
+    }
+    const csv = rows
+      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))
+      .join('\n')
+    trigger(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }), 'workpulse360-raumbuch.csv')
+    appendAudit('exportar', 'Raumbuch CSV')
+  }
+
   // Proyecto portable: mediciones + nombres + alturas (las fotos van aparte).
   function exportProject() {
     const data = {
@@ -457,6 +490,10 @@ export default function App360() {
           {totalMeasurements > 0 && (
             <>
               <button onClick={exportCSV}>📄 CSV ({totalMeasurements})</button>
+              <button onClick={exportRaumbuch}
+                title="Libro de habitaciones (Raumbuch): una fila por espacio con superficies, altura, volumen y equipamiento — para facility management">
+                🏢 Raumbuch
+              </button>
               <button onClick={exportProject} title="Descarga las mediciones como archivo de proyecto">💾 Proyecto</button>
               <button onClick={exportBackup} title="Copia de seguridad completa: fotos + mediciones en un ZIP">🗄️ Copia completa</button>
             </>

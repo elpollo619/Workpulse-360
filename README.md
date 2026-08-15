@@ -58,6 +58,18 @@ del dispositivo.
   plano y el DXF (capa ELEMENTOS) con recuento por habitación en el informe
 - 📐 Plano con **ángulos de esquina** (en rojo si no son de 90°) y
   **perímetro (U =)** por habitación, estilo aufmaß profesional
+- 🧾 **Integridad metrológica** (inédito): incertidumbre **±** por medición,
+  índice de fiabilidad **A/B/C** por habitación, valores de control
+  «@valor» verificados contra láser/cinta, y **cuaderno de campo digital**
+  encadenado con SHA-256 (a prueba de manipulación)
+- ♿ **Plantilla SIA 500 proyectada en la foto**: círculo de giro Ø 1.50 m y
+  maniobra 1.40 × 1.70 m sobre el suelo real — comprobación de holguras a ojo
+- 🧩 Plano general con **verificación de coherencia entre salas** (Δ del muro
+  compartido medido desde ambos lados, estilo cierre topográfico)
+- 💧 **Línea de daño/inundación** con superficie afectada (peritajes) ·
+  🎨 pared **neta** descontando huecos «ventana 1.2x1.5» · rodapié · mermas
+  por patrón (+10/20/25 %) · 🔊 acústica RT60 estimada
+- 🏢 **Raumbuch CSV** (libro de habitaciones para facility management)
 
 ## Desarrollo
 

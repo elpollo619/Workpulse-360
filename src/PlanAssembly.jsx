@@ -74,6 +74,8 @@ function bestWallPair(ptsA, ptsB, maxGap = 0.6, maxAngleDeg = 8) {
         best = {
           angleDiff: d,
           gap,
+          lenA,
+          lenB,
           mid: {
             x: a1.x + u.x * tm + n.x * (((b1.x - a1.x) * n.x + (b1.z - a1.z) * n.z) > 0 ? gap / 2 : -gap / 2),
             z: a1.z + u.z * tm + n.z * (((b1.x - a1.x) * n.x + (b1.z - a1.z) * n.z) > 0 ? gap / 2 : -gap / 2),
@@ -245,7 +247,9 @@ export default function PlanAssembly({ store, roomNames, roomTypes, unitSys = 'm
     URL.revokeObjectURL(url)
   }
 
-  // Grosores de muro aparentes entre habitaciones adyacentes (par a par).
+  // Grosores de muro aparentes entre habitaciones adyacentes + verificación
+  // de coherencia: el mismo muro medido desde cada lado debería coincidir.
+  // El "Δ" es el equivalente doméstico del ratio de cierre de un topógrafo.
   const wallLabels = useMemo(() => {
     const out = []
     for (let i = 0; i < rooms.length; i++) {
@@ -253,11 +257,16 @@ export default function PlanAssembly({ store, roomNames, roomTypes, unitSys = 'm
         const a = rooms[i].outlines[0].points.map((p) => transformPoint(p, rooms[i].centroid, rooms[i].t))
         const b = rooms[j].outlines[0].points.map((p) => transformPoint(p, rooms[j].centroid, rooms[j].t))
         const pair = bestWallPair(a, b)
-        if (pair && pair.gap >= 0.02) out.push({ mid: pair.mid, gap: pair.gap })
+        if (pair && pair.gap >= 0.02) {
+          const delta = Math.abs(pair.lenA - pair.lenB)
+          const deltaPct = (delta / Math.max(pair.lenA, pair.lenB)) * 100
+          out.push({ mid: pair.mid, gap: pair.gap, delta, deltaPct })
+        }
       }
     }
     return out
   }, [rooms])
+  const worstDelta = wallLabels.length ? Math.max(...wallLabels.map((w) => w.deltaPct)) : null
 
   const gridStep = scale > 60 ? 1 : scale > 25 ? 2 : 5
   const gridLines = []
@@ -272,7 +281,15 @@ export default function PlanAssembly({ store, roomNames, roomTypes, unitSys = 'm
     <div className="floorplan">
       <div className="floorplan-card" style={{ maxWidth: 920 }}>
         <div className="floorplan-head">
-          <b>🧩 Plano general — {fmtArea(totalArea, unitSys)} en {rooms.length} espacio(s)</b>
+          <b>
+            🧩 Plano general — {fmtArea(totalArea, unitSys)} en {rooms.length} espacio(s)
+            {worstDelta != null && (
+              <span style={{ marginLeft: 8, fontSize: 12, color: worstDelta < 2 ? 'var(--ok)' : 'var(--warn)' }}
+                title="Coherencia: el mismo muro medido desde las dos habitaciones adyacentes; un Δ alto indica error de medición o calibración en alguna de las dos">
+                · coherencia entre salas: Δ máx {worstDelta.toFixed(1)} %
+              </span>
+            )}
+          </b>
           <span>
             <button onClick={() => rotateSelected(-15)} disabled={!selected} title="Rotar la habitación seleccionada">⟲ 15°</button>{' '}
             <button onClick={() => rotateSelected(15)} disabled={!selected} title="Rotar la habitación seleccionada">⟳ 15°</button>{' '}
@@ -301,6 +318,12 @@ export default function PlanAssembly({ store, roomNames, roomTypes, unitSys = 'm
               <text x={sx(w.mid.x) + 6} y={sy(w.mid.z) - 5} fontSize="10" fill="#b3261e" fontWeight="600">
                 muro {(w.gap * 100).toFixed(0)} cm
               </text>
+              {w.delta > 0.03 && (
+                <text x={sx(w.mid.x) + 6} y={sy(w.mid.z) + 7} fontSize="9"
+                  fill={w.deltaPct < 2 ? '#5f6d7a' : '#b3261e'}>
+                  Δ {(w.delta * 100).toFixed(0)} cm ({w.deltaPct.toFixed(1)} %)
+                </text>
+              )}
             </g>
           ))}
           {rooms.map((r, idx) => {
