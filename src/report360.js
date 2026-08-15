@@ -102,7 +102,7 @@ function buildReportHTML(store, roomNames = {}, opts = {}, autoPrint = true) {
       const tipo = {
         distance: '📏 Distancia', path: '📐 Ruta', area: '⬛ Área',
         height: '📊 Altura', wall: '🧱 Pared', note: '📝 Nota',
-        slope: '⛰️ Pendiente', marker: '🔌 Elemento',
+        slope: '⛰️ Pendiente', marker: '🔌 Elemento', stereo: '🛰️ Estéreo',
       }[m.mode] ?? m.mode
       const err = estimateError(m)
       const errTxt = err != null

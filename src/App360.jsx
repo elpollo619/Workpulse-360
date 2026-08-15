@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import Pano360View from './Pano360View.jsx'
 import FloorPlan from './FloorPlan.jsx'
 import PlanAssembly from './PlanAssembly.jsx'
+import StereoMode from './StereoMode.jsx'
 import { openSessionReport, downloadSessionReport, getSessionReportHTML } from './report360.js'
 import { savePhoto, listPhotos, deletePhoto } from './photostore.js'
 import { fmtArea } from './units.js'
@@ -44,6 +45,7 @@ export default function App360() {
   const [unitSys, setUnitSys] = useState(() => localStorage.getItem(UNITS_KEY) || 'm')
   const [showPlan, setShowPlan] = useState(false)
   const [showAssembly, setShowAssembly] = useState(false)
+  const [showStereo, setShowStereo] = useState(false)
   const [restoring, setRestoring] = useState(true)
   const importRef = useRef(null)
 
@@ -499,6 +501,12 @@ export default function App360() {
             </>
           )}
           <button onClick={() => importRef.current?.click()} title="Cargar un proyecto o copia completa (.json / .zip)">📂 Importar</button>
+          {photos.length >= 2 && (
+            <button onClick={() => setShowStereo(true)}
+              title="Máxima precisión: dos fotos de la misma sala + distancia entre cámaras → triangulación pura">
+              🛰️ Estéreo (2 fotos)
+            </button>
+          )}
           <input ref={importRef} type="file" accept=".json,.zip,application/json,application/zip" hidden onChange={importProject} />
         </div>
       </div>
@@ -547,6 +555,18 @@ export default function App360() {
         ¿Mediciones de terreno con drone? → <a href="../">Workpulse Drohne 🚁</a>
       </footer>
 
+      {showStereo && (
+        <StereoMode
+          photos={photos}
+          levels={levels}
+          unitSys={unitSys}
+          onSave={(photoName, m) => {
+            setStore((prev) => ({ ...prev, [photoName]: [...(prev[photoName] ?? []), m] }))
+            appendAudit('medir', `${photoName} · ${m.label} · estéreo · ${m.value.toFixed(3)} m · base=${m.baseline}`)
+          }}
+          onClose={() => setShowStereo(false)}
+        />
+      )}
       {showAssembly && (
         <PlanAssembly
           store={store}
