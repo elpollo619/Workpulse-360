@@ -1,5 +1,12 @@
 # Medidor láser Workpulse (DIY) 🔦
 
+> **¿Ya tienes un Bosch GLM con Bluetooth (p. ej. GLM 50-27 C)?** Entonces
+> no necesitas construir nada: la app lo soporta directamente. Enciende el
+> Bluetooth del GLM (botón ᛒ), pulsa **🔗** en el visor, elige el `Bosch
+> GLM…` y dispara mediciones en el aparato — cada valor llega a la app y se
+> propone al calibrar. (Un Stanley TLM 165 no tiene Bluetooth; sus valores
+> se teclean a mano.)
+
 Medidor de distancias por láser que se conecta a **Workpulse 360** por
 Bluetooth (Web Bluetooth). Al calibrar en la app (🎯/🚪), la lectura del
 láser se propone automáticamente como valor real — calibración de la altura

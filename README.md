@@ -39,8 +39,9 @@ del dispositivo.
   indicando dónde cruza la altura 1.50 m (regla WBS)
 - 🧲 Plano general con **snap de paredes** al soltar y **grosor de muro
   aparente** entre habitaciones adyacentes
-- 🔗 **Medidor láser por Bluetooth** (Web Bluetooth): conecta el láser DIY
-  de la carpeta [`hardware/`](hardware/) y su lectura se propone sola al
+- 🔗 **Medidor láser por Bluetooth** (Web Bluetooth): compatible con los
+  **Bosch GLM con Bluetooth** (GLM 50-27 C, GLM 50 C…) y con el láser DIY
+  de la carpeta [`hardware/`](hardware/); la lectura se propone sola al
   calibrar (Chrome/Edge)
 - 🔌 **Planificación eléctrica**: coloca enchufes, interruptores,
   luminarias, cajas y tomas sobre la foto — aparecen como símbolos en el

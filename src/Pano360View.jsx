@@ -181,7 +181,9 @@ export default function Pano360View({
         () => { setLaser(null); setLaserReading(null) }
       )
       setLaser(conn)
-      setMessage('🔗 Láser conectado. Su lectura se ofrecerá como valor al calibrar.')
+      setMessage(conn.kind === 'bosch'
+        ? '🔗 Bosch GLM conectado. Dispara una medición en el aparato y su valor se ofrecerá al calibrar.'
+        : '🔗 Láser conectado. Su lectura se ofrecerá como valor al calibrar.')
     } catch {
       setMessage('⚠️ No se pudo conectar el láser (¿Bluetooth activado? ¿Chrome/Edge?).')
     }
