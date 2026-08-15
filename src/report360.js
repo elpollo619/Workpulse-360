@@ -16,12 +16,12 @@ const esc = (s) =>
  * @param {{[photo:string]: string}} roomNames   nombre de habitación por foto
  * @param {{unitSys?: string, roomTypes?: Object}} opts
  */
-export function openSessionReport(store, roomNames = {}, opts = {}) {
+function buildReportHTML(store, roomNames = {}, opts = {}, autoPrint = true) {
   const u = opts.unitSys ?? 'm'
   const roomTypes = opts.roomTypes ?? {}
   const weights = opts.weights ?? {}
   const rooms = Object.entries(store).filter(([, ms]) => ms.length > 0)
-  if (!rooms.length) return false
+  if (!rooms.length) return null
 
   let totalArea = 0
   let totalVolume = 0
@@ -153,12 +153,33 @@ ${sections}
 <footer>Medidas por trigonometría sobre foto 360° equirectangular con altura de cámara conocida o calibrada
 (proyección al plano del suelo; alturas por pie/tope a plomada). Válido en suelos planos; la exactitud
 depende de la nivelación de la cámara y de la altura indicada. No es un levantamiento topográfico.</footer>
-<script>window.onload = () => setTimeout(() => window.print(), 300)</script>
+${autoPrint ? '<script>window.onload = () => setTimeout(() => window.print(), 300)</script>' : ''}
 </body></html>`
 
+  return html
+}
+
+/** Abre el informe en una ventana y lanza el diálogo de imprimir/PDF. */
+export function openSessionReport(store, roomNames = {}, opts = {}) {
+  const html = buildReportHTML(store, roomNames, opts, true)
+  if (!html) return false
   const win = window.open('', '_blank')
   if (!win) return false
   win.document.write(html)
   win.document.close()
+  return true
+}
+
+/** Descarga el informe como archivo HTML autónomo (planos SVG incluidos). */
+export function downloadSessionReport(store, roomNames = {}, opts = {}) {
+  const html = buildReportHTML(store, roomNames, opts, false)
+  if (!html) return false
+  const blob = new Blob([html], { type: 'text/html' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'workpulse360-informe.html'
+  a.click()
+  URL.revokeObjectURL(url)
   return true
 }

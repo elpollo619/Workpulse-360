@@ -43,6 +43,12 @@ del dispositivo.
   **Bosch GLM con Bluetooth** (GLM 50-27 C, GLM 50 C…) y con el láser DIY
   de la carpeta [`hardware/`](hardware/); la lectura se propone sola al
   calibrar (Chrome/Edge)
+- 📲 **App instalable (PWA)** que funciona **sin conexión** — ideal en obra
+  sin cobertura; en el móvil: menú del navegador → «Añadir a pantalla de inicio»
+- 🧭 **Auto-nivelación** leyendo la pose GPano (XMP) que escriben las
+  Insta360/Theta al abrir cada foto
+- 🗄️ **Copia de seguridad completa** (ZIP con fotos + mediciones) y
+  restauración con un clic · 📑 informe como **HTML autónomo**
 - 🎚️ **Modo precisión**: nivelación fina de la foto (cabeceo/alabeo con
   rejilla de verticales, persistida por foto), **calibración multi-muestra**
   con ajuste ponderado e indicador de dispersión, unidad **mm** y lupa de

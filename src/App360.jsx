@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import Pano360View from './Pano360View.jsx'
 import FloorPlan from './FloorPlan.jsx'
 import PlanAssembly from './PlanAssembly.jsx'
-import { openSessionReport } from './report360.js'
+import { openSessionReport, downloadSessionReport } from './report360.js'
 import { savePhoto, listPhotos, deletePhoto } from './photostore.js'
 import { fmtArea } from './units.js'
 import { SIA416_TYPES, DEFAULT_TYPE } from './sia.js'
+import { readGPanoPose, levelFromPose } from './gpano.js'
 
 const STORE_KEY = 'workpulse360.measurements.v1'
 const NAMES_KEY = 'workpulse360.roomnames.v1'
@@ -129,7 +130,17 @@ export default function App360() {
     const files = [...(e.target.files ?? [])]
     if (!files.length) return
     const added = files.map((f) => ({ name: f.name, url: URL.createObjectURL(f) }))
-    for (const f of files) savePhoto(f.name, f).catch(() => {})
+    for (const f of files) {
+      savePhoto(f.name, f).catch(() => {})
+      // Auto-nivel: si la foto trae pose GPano (Insta360/Theta) y aún no hay
+      // ajuste manual, se pre-carga la nivelación fina.
+      readGPanoPose(f).then((pose) => {
+        const lv = levelFromPose(pose)
+        if (lv) {
+          setLevels((prev) => (prev[f.name] ? prev : { ...prev, [f.name]: lv }))
+        }
+      }).catch(() => {})
+    }
     setPhotos((prev) => {
       const names = new Set(prev.map((p) => p.name))
       return [...prev, ...added.filter((a) => !names.has(a.name))]
@@ -172,26 +183,69 @@ export default function App360() {
       app: 'workpulse360',
       version: 1,
       exportedAt: new Date().toISOString(),
-      store, roomNames, camHeights, roomTypes, weights, unitSys,
+      store, roomNames, camHeights, roomTypes, levels, weights, unitSys,
     }
     const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' })
     trigger(blob, 'proyecto-workpulse360.json')
+  }
+
+  function applyProjectData(data) {
+    if (data?.app !== 'workpulse360' || !data.store) throw new Error('formato')
+    setStore((prev) => ({ ...prev, ...data.store }))
+    setRoomNames((prev) => ({ ...prev, ...data.roomNames }))
+    setCamHeights((prev) => ({ ...prev, ...data.camHeights }))
+    setRoomTypes((prev) => ({ ...prev, ...data.roomTypes }))
+    setLevels((prev) => ({ ...prev, ...data.levels }))
+    if (data.weights) setWeights((prev) => ({ ...prev, ...data.weights }))
+    if (data.unitSys) setUnitSys(data.unitSys)
+  }
+
+  // Copia de seguridad completa: fotos (IndexedDB) + datos, en un solo ZIP.
+  async function exportBackup() {
+    const { default: JSZip } = await import('jszip')
+    const zip = new JSZip()
+    const data = {
+      app: 'workpulse360', version: 1, exportedAt: new Date().toISOString(),
+      store, roomNames, camHeights, roomTypes, levels, weights, unitSys,
+    }
+    zip.file('proyecto.json', JSON.stringify(data, null, 1))
+    const rows = await listPhotos().catch(() => [])
+    const folder = zip.folder('fotos')
+    for (const r of rows) folder.file(r.name, r.blob)
+    const blob = await zip.generateAsync({ type: 'blob' })
+    trigger(blob, 'workpulse360-copia-completa.zip')
   }
 
   function importProject(e) {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
+    if (/\.zip$/i.test(file.name)) {
+      // Copia completa: restaura datos y fotos.
+      import('jszip').then(async ({ default: JSZip }) => {
+        const zip = await JSZip.loadAsync(file)
+        const projFile = zip.file('proyecto.json')
+        if (projFile) applyProjectData(JSON.parse(await projFile.async('string')))
+        const restored = []
+        for (const entry of Object.values(zip.files)) {
+          if (entry.dir || !entry.name.startsWith('fotos/')) continue
+          const name = entry.name.slice('fotos/'.length)
+          if (!name) continue
+          const blob = await entry.async('blob')
+          await savePhoto(name, blob).catch(() => {})
+          restored.push({ name, url: URL.createObjectURL(blob) })
+        }
+        setPhotos((prev) => {
+          const names = new Set(prev.map((p) => p.name))
+          return [...prev, ...restored.filter((r) => !names.has(r.name))]
+        })
+        alert(`Copia restaurada: ${restored.length} foto(s) con sus mediciones.`)
+      }).catch(() => alert('No se pudo leer esa copia de seguridad.'))
+      return
+    }
     file.text().then((txt) => {
-      const data = JSON.parse(txt)
-      if (data?.app !== 'workpulse360' || !data.store) throw new Error('formato')
-      setStore((prev) => ({ ...prev, ...data.store }))
-      setRoomNames((prev) => ({ ...prev, ...data.roomNames }))
-      setCamHeights((prev) => ({ ...prev, ...data.camHeights }))
-      setRoomTypes((prev) => ({ ...prev, ...data.roomTypes }))
-      if (data.weights) setWeights((prev) => ({ ...prev, ...data.weights }))
-      if (data.unitSys) setUnitSys(data.unitSys)
-      alert(`Proyecto importado: ${Object.keys(data.store).length} espacio(s). Abre las fotos con el mismo nombre para ver las mediciones.`)
+      applyProjectData(JSON.parse(txt))
+      alert('Proyecto importado. Abre las fotos con el mismo nombre para ver las mediciones.')
     }).catch(() => alert('Ese archivo no parece un proyecto de Workpulse 360.'))
   }
 
@@ -342,6 +396,9 @@ export default function App360() {
             <button onClick={exportCSV}>📄 CSV ({totalMeasurements})</button>
             <button onClick={() => openSessionReport(store, roomNames, { unitSys, roomTypes, weights })}>🖨️ Informe de sesión</button>
             <button onClick={exportProject} title="Descarga las mediciones como archivo de proyecto">💾 Proyecto</button>
+            <button onClick={exportBackup} title="Copia de seguridad completa: fotos + mediciones en un ZIP">🗄️ Copia completa</button>
+            <button onClick={() => downloadSessionReport(store, roomNames, { unitSys, roomTypes, weights })}
+              title="Informe como archivo HTML autónomo (se abre en cualquier navegador)">📑 Informe HTML</button>
             {roomsWithOutline > 0 && (
               <button onClick={() => setShowAssembly(true)}
                 title="Ensamblar todas las habitaciones en un plano de conjunto">
@@ -351,7 +408,7 @@ export default function App360() {
           </>
         )}
         <button onClick={() => importRef.current?.click()} title="Cargar un proyecto exportado antes">📂 Importar proyecto</button>
-        <input ref={importRef} type="file" accept="application/json,.json" hidden onChange={importProject} />
+        <input ref={importRef} type="file" accept=".json,.zip,application/json,application/zip" hidden onChange={importProject} />
       </div>
 
       <details className="app360-step">

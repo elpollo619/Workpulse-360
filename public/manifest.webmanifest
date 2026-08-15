@@ -1,0 +1,14 @@
+{
+  "name": "Workpulse 360",
+  "short_name": "Workpulse360",
+  "description": "Medición de espacios con cámara 360°: distancias, áreas, alturas, planos e informes — todo en el dispositivo.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f1418",
+  "theme_color": "#0f1418",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

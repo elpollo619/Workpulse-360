@@ -744,4 +744,25 @@ a.applink {
     width: 180px;
     max-height: 40%;
   }
+  /* La barra creció con los modos nuevos: en móvil, los modos van en una
+     fila deslizable y el conjunto se limita en alto con scroll. */
+  .pano360-top {
+    top: 6px;
+    left: 6px;
+    right: 6px;
+    transform: none;
+    max-width: none;
+    gap: 5px;
+    padding: 6px;
+    max-height: 108px;
+    overflow-y: auto;
+  }
+  .pano360-modes {
+    width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 2px;
+  }
+  .pano360-modes button { white-space: nowrap; flex: none; }
+  .pano360-level { top: 120px; }
 }
