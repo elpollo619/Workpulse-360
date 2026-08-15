@@ -7,12 +7,14 @@ import {
   wallPlaneFromPoints, wallPointFromDirection, dist3D,
 } from './pano.js'
 import { UNIT_SYSTEMS, fmtLength, fmtArea, fmtValue } from './units.js'
+import { laserSupported, connectLaser } from './laser.js'
 
 const MODES = [
   { id: 'distance', label: '📏 Distancia', hint: 'Toca dos puntos del SUELO' },
   { id: 'path', label: '📐 Ruta / Área', hint: 'Encadena puntos del suelo; toca el 1º punto o ⬛ para cerrar' },
   { id: 'height', label: '📊 Altura', hint: 'Toca el PIE del objeto (en el suelo) y luego su parte ALTA' },
   { id: 'wall', label: '🧱 Pared', hint: 'Toca 2 puntos de la BASE de la pared (en el suelo); después mide pares de puntos SOBRE esa pared (ventanas, huecos, diagonales)' },
+  { id: 'slope', label: '⛰️ Pendiente', hint: 'Ángulo de techo inclinado: PIE y TOPE del punto BAJO, luego PIE y TOPE del punto ALTO' },
   { id: 'note', label: '📝 Nota', hint: 'Toca cualquier punto para anclar una nota (defecto, material, recordatorio…)' },
   { id: 'calibrate', label: '🎯 Calibrar', hint: 'Toca 2 puntos del suelo con distancia CONOCIDA (p. ej. una baldosa o un metro plegable)' },
   { id: 'calibv', label: '🚪 Puerta', hint: 'Calibrar con altura conocida: toca el PIE y el TOPE de una puerta (CH ≈ 2.10 m; stock antiguo 2.00) u otra referencia' },
@@ -106,6 +108,9 @@ export default function Pano360View({
   const measurementsRef = useRef(measurements)
   const unitRef = useRef(unitSys)
   const keepMsgRef = useRef(false)
+  const [laser, setLaser] = useState(null) // {disconnect}
+  const [laserReading, setLaserReading] = useState(null) // metros
+  const laserRef = useRef({ value: null, at: 0 })
 
   useEffect(() => { tapsRef.current = taps }, [taps])
   useEffect(() => { orthoRef.current = ortho }, [ortho])
@@ -145,7 +150,35 @@ export default function Pano360View({
     setTaps([])
   }
 
+  async function toggleLaser() {
+    if (laser) {
+      laser.disconnect()
+      setLaser(null)
+      setLaserReading(null)
+      return
+    }
+    try {
+      const conn = await connectLaser(
+        (m) => {
+          laserRef.current = { value: m, at: Date.now() }
+          setLaserReading(m)
+        },
+        () => { setLaser(null); setLaserReading(null) }
+      )
+      setLaser(conn)
+      setMessage('🔗 Láser conectado. Su lectura se ofrecerá como valor al calibrar.')
+    } catch {
+      setMessage('⚠️ No se pudo conectar el láser (¿Bluetooth activado? ¿Chrome/Edge?).')
+    }
+  }
+
   function applyCalibration(measured, promptText, defaultVal = '') {
+    // Si hay un láser conectado con lectura reciente, se ofrece como valor.
+    const l = laserRef.current
+    if (l.value != null && Date.now() - l.at < 60000) {
+      defaultVal = l.value.toFixed(3)
+      promptText += `\n🔗 Lectura del láser: ${l.value.toFixed(3)} m (propuesta como valor)`
+    }
     const input = prompt(promptText, defaultVal)
     if (input === null) { setTaps([]); return }
     const real = parseFloat(String(input).replace(',', '.'))
@@ -279,6 +312,38 @@ export default function Pano360View({
     setTaps((prev) => prev.slice(0, 2))
   }
 
+  function saveSlope(f1, t1dir, f2, t2dir) {
+    const h = camHeightRef.current
+    const h1 = objectHeight(f1.fp, t1dir, h)
+    const h2 = objectHeight(f2.fp, t2dir, h)
+    const run = floorDistance(f1.fp, f2.fp)
+    if (h1 == null || h2 == null || run < 0.05) {
+      setMessage('⚠️ No se pudo calcular la pendiente. Los dos pies deben estar separados y en el suelo.')
+      setTaps([])
+      return
+    }
+    const angle = Math.abs(Math.atan2(h2 - h1, run) * 180 / Math.PI)
+    const lo = Math.min(h1, h2)
+    const hi = Math.max(h1, h2)
+    // Regla WBS: ¿a qué distancia del punto bajo la altura cruza 1.50 m?
+    const crossTxt = lo < 1.5 && hi > 1.5
+      ? ` · cruza 1.50 m a ${(run * (1.5 - lo) / (hi - lo)).toFixed(2)} m del punto bajo`
+      : ''
+    onSave?.({
+      id: crypto.randomUUID(),
+      mode: 'slope',
+      label: nextLabel('slope'),
+      value: angle,
+      unit: '°',
+      text: `${lo.toFixed(2)}→${hi.toFixed(2)} m sobre ${run.toFixed(2)} m${crossTxt}`,
+      points: [f1.fp, f2.fp],
+      dirs: [f1.dir, t1dir, f2.dir, t2dir],
+      camHeight: h,
+    })
+    setMessage(`⛰️ Guardado: pendiente ${angle.toFixed(1)}° (${lo.toFixed(2)} m → ${hi.toFixed(2)} m)${crossTxt}`)
+    setTaps([])
+  }
+
   function saveNote(dir) {
     const text = prompt('Texto de la nota (defecto, material, recordatorio…):')
     if (!text?.trim()) { setTaps([]); return }
@@ -310,8 +375,11 @@ export default function Pano360View({
 
   apiRef.current = {
     saveDistance, saveHeight, savePath, calibrateWith, calibrateVerticalWith,
-    saveWallDistance, saveNote, undo,
+    saveWallDistance, saveNote, saveSlope, undo,
   }
+
+  // El láser se desconecta al cerrar el visor.
+  useEffect(() => () => { laser?.disconnect() }, [laser])
 
   // Atajos de teclado: Ctrl+Z deshacer, Escape cancelar, Enter cerrar área.
   useEffect(() => {
@@ -528,6 +596,19 @@ export default function Pano360View({
             apiRef.current.saveWallDistance(prev[0], prev[1], prev[2].wp, wp)
           } else {
             setTaps([...prev, wallTap])
+          }
+        }
+      } else if (m === 'slope') {
+        // Pares pie/tope: índices pares = pie en el suelo, impares = tope a plomada.
+        if (prev.length % 2 === 0) {
+          if (!fp) { setMessage('⚠️ El PIE debe estar en el suelo.'); return }
+          setTaps([...prev, tap])
+        } else {
+          const topDir = plumbSnap(tap.dir, prev[prev.length - 1].dir)
+          if (prev.length === 3) {
+            apiRef.current.saveSlope(prev[0], prev[1].topDir ?? prev[1].dir, prev[2], topDir)
+          } else {
+            setTaps([...prev, { dir: topDir, topDir, fp: null }])
           }
         }
       } else if (m === 'note') {
@@ -750,6 +831,13 @@ export default function Pano360View({
       if (taps.length === 1) setMessage('🧱 Toca el SEGUNDO punto de la base de la pared (en el suelo).')
       else if (taps.length === 2) setMessage(`🧱 Pared definida (base ${fmtLength(floorDistance(taps[0].fp, taps[1].fp), u)}). Toca 2 puntos SOBRE la pared para medir.`)
       else if (taps.length === 3) setMessage('🧱 Toca el segundo punto sobre la pared (ancho, alto o diagonal del hueco).')
+    } else if (mode === 'slope') {
+      const msgs = [
+        '', '⛰️ Toca el TOPE sobre ese pie (punto BAJO de la pendiente).',
+        '⛰️ Ahora el PIE del punto ALTO de la pendiente.',
+        '⛰️ Y el TOPE sobre ese pie.',
+      ]
+      setMessage(msgs[taps.length] ?? '')
     }
   }, [taps, mode, unitSys])
 
@@ -796,6 +884,12 @@ export default function Pano360View({
         <button className={gyro ? 'active' : ''} onClick={toggleGyro}
           title="Giroscopio: mirar moviendo el teléfono">🧭</button>
         <button onClick={screenshot} title="Descargar captura PNG de la vista con las mediciones">📸</button>
+        {laserSupported() && (
+          <button className={laser ? 'active' : ''} onClick={toggleLaser}
+            title="Conectar el medidor láser Workpulse (Bluetooth). Su lectura se usa al calibrar.">
+            🔗{laserReading != null ? ` ${laserReading.toFixed(2)} m` : ''}
+          </button>
+        )}
         <button onClick={() => setPanelOpen((v) => !v)}>📋</button>
         <button onClick={onClose}>✕</button>
       </div>

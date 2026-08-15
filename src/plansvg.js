@@ -100,7 +100,9 @@ export function buildPlanSVG(measurements, opts = {}) {
         )
       }
     }
-    const valText = m.unit === 'm²' ? fmtArea(m.value, unitSys) : fmtLength(m.value, unitSys)
+    const valText = m.unit === '°'
+      ? `${m.value.toFixed(1)}°`
+      : m.unit === 'm²' ? fmtArea(m.value, unitSys) : fmtLength(m.value, unitSys)
     parts.push(
       `<text x="${cx.toFixed(1)}" y="${cz.toFixed(1)}" text-anchor="middle" font-size="12" font-weight="600" fill="${color}">${escapeXML(m.label)}: ${valText}</text>`
     )

@@ -64,7 +64,8 @@ export function buildDXF(measurements, roomName = 'HABITACION') {
     }
     const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length
     const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length
-    rows.push(...text(cx, cy, 0.18, `${m.label} ${m.value.toFixed(2)}${m.unit === 'm²' ? 'm2' : m.unit}`, layerName))
+    const unitTxt = { 'm²': 'm2', '°': 'deg' }[m.unit] ?? m.unit
+    rows.push(...text(cx, cy, 0.18, `${m.label} ${m.value.toFixed(2)}${unitTxt}`, layerName))
   }
 
   rows.push('0', 'ENDSEC', '0', 'EOF')

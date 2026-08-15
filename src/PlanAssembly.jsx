@@ -29,10 +29,69 @@ function transformPoint(p, c, t) {
   }
 }
 
+/** Aristas (p→q) de un polígono. */
+function edgesOf(pts) {
+  return pts.map((p, i) => [p, pts[(i + 1) % pts.length]])
+}
+
+/**
+ * Busca el mejor par de aristas casi paralelas y cercanas entre dos
+ * contornos: candidato a "pared compartida". Devuelve null o
+ * {angleDiff, gap, mid} (gap = grosor de muro aparente en metros).
+ */
+function bestWallPair(ptsA, ptsB, maxGap = 0.6, maxAngleDeg = 8) {
+  let best = null
+  for (const [a1, a2] of edgesOf(ptsA)) {
+    const ux = a2.x - a1.x
+    const uz = a2.z - a1.z
+    const lenA = Math.hypot(ux, uz)
+    if (lenA < 0.3) continue
+    const u = { x: ux / lenA, z: uz / lenA }
+    const n = { x: -u.z, z: u.x }
+    const angA = Math.atan2(uz, ux)
+    for (const [b1, b2] of edgesOf(ptsB)) {
+      const lenB = Math.hypot(b2.x - b1.x, b2.z - b1.z)
+      if (lenB < 0.3) continue
+      const angB = Math.atan2(b2.z - b1.z, b2.x - b1.x)
+      let d = (angB - angA) % Math.PI
+      if (d > Math.PI / 2) d -= Math.PI
+      if (d < -Math.PI / 2) d += Math.PI
+      if (Math.abs(d) > (maxAngleDeg * Math.PI) / 180) continue
+      // Solape a lo largo de la arista A.
+      const t1 = (b1.x - a1.x) * u.x + (b1.z - a1.z) * u.z
+      const t2 = (b2.x - a1.x) * u.x + (b2.z - a1.z) * u.z
+      const overlap = Math.min(lenA, Math.max(t1, t2)) - Math.max(0, Math.min(t1, t2))
+      if (overlap < 0.3) continue
+      // Separación perpendicular (grosor de muro aparente).
+      const g1 = Math.abs((b1.x - a1.x) * n.x + (b1.z - a1.z) * n.z)
+      const g2 = Math.abs((b2.x - a1.x) * n.x + (b2.z - a1.z) * n.z)
+      const gap = (g1 + g2) / 2
+      if (gap > maxGap) continue
+      if (!best || gap < best.gap) {
+        const lo = Math.max(0, Math.min(t1, t2))
+        const hi = Math.min(lenA, Math.max(t1, t2))
+        const tm = (lo + hi) / 2
+        best = {
+          angleDiff: d,
+          gap,
+          mid: {
+            x: a1.x + u.x * tm + n.x * (((b1.x - a1.x) * n.x + (b1.z - a1.z) * n.z) > 0 ? gap / 2 : -gap / 2),
+            z: a1.z + u.z * tm + n.z * (((b1.x - a1.x) * n.x + (b1.z - a1.z) * n.z) > 0 ? gap / 2 : -gap / 2),
+          },
+        }
+      }
+    }
+  }
+  return best
+}
+
 /**
  * Plano general: ensambla los contornos de todas las habitaciones en un solo
  * plano. Arrastra para mover cada habitación y rota con los controles — el
- * "assembly" de magicplan, en versión ligera. Posiciones persistentes.
+ * "assembly" de magicplan, en versión ligera. Al soltar, la habitación se
+ * alinea a la pared paralela más próxima y se muestra el grosor de muro
+ * aparente (como el auto-conectado de los escáneres comerciales).
+ * Posiciones persistentes.
  */
 export default function PlanAssembly({ store, roomNames, roomTypes, unitSys = 'm', onClose }) {
   const [transforms, setTransforms] = useState(() => {
@@ -119,7 +178,26 @@ export default function PlanAssembly({ store, roomNames, roomTypes, unitSys = 'm
   }
 
   function onPointerUp() {
+    const d = dragRef.current
     dragRef.current = null
+    if (!d) return
+    // Snap al soltar: si hay una pared casi paralela cerca, se alinea la
+    // rotación para dejarlas exactamente paralelas.
+    const dragged = rooms.find((r) => r.photo === d.photo)
+    if (!dragged) return
+    const dPts = dragged.outlines[0].points.map((p) => transformPoint(p, dragged.centroid, dragged.t))
+    for (const other of rooms) {
+      if (other.photo === d.photo) continue
+      const oPts = other.outlines[0].points.map((p) => transformPoint(p, other.centroid, other.t))
+      const pair = bestWallPair(oPts, dPts)
+      if (pair && Math.abs(pair.angleDiff) > 0.002) {
+        setTransforms((prev) => ({
+          ...prev,
+          [d.photo]: { ...dragged.t, rot: dragged.t.rot - pair.angleDiff },
+        }))
+        break
+      }
+    }
   }
 
   function rotateSelected(deg) {
@@ -167,6 +245,20 @@ export default function PlanAssembly({ store, roomNames, roomTypes, unitSys = 'm
     URL.revokeObjectURL(url)
   }
 
+  // Grosores de muro aparentes entre habitaciones adyacentes (par a par).
+  const wallLabels = useMemo(() => {
+    const out = []
+    for (let i = 0; i < rooms.length; i++) {
+      for (let j = i + 1; j < rooms.length; j++) {
+        const a = rooms[i].outlines[0].points.map((p) => transformPoint(p, rooms[i].centroid, rooms[i].t))
+        const b = rooms[j].outlines[0].points.map((p) => transformPoint(p, rooms[j].centroid, rooms[j].t))
+        const pair = bestWallPair(a, b)
+        if (pair && pair.gap >= 0.02) out.push({ mid: pair.mid, gap: pair.gap })
+      }
+    }
+    return out
+  }, [rooms])
+
   const gridStep = scale > 60 ? 1 : scale > 25 ? 2 : 5
   const gridLines = []
   for (let x = Math.ceil(bounds.minX / gridStep) * gridStep; x <= bounds.maxX; x += gridStep) {
@@ -203,6 +295,14 @@ export default function PlanAssembly({ store, roomNames, roomTypes, unitSys = 'm
           <rect x="0" y="0" width={W} height={H} fill="#ffffff" />
           {gridLines}
           <text x={W - 10} y={H - 8} textAnchor="end" fontSize="11" fill="#8a97a3">cuadrícula {gridStep} m</text>
+          {wallLabels.map((w, i) => (
+            <g key={`wall${i}`}>
+              <circle cx={sx(w.mid.x)} cy={sy(w.mid.z)} r="3" fill="#b3261e" />
+              <text x={sx(w.mid.x) + 6} y={sy(w.mid.z) - 5} fontSize="10" fill="#b3261e" fontWeight="600">
+                muro {(w.gap * 100).toFixed(0)} cm
+              </text>
+            </g>
+          ))}
           {rooms.map((r, idx) => {
             const color = MEASURE_COLORS[idx % MEASURE_COLORS.length]
             const name = roomNames[r.photo] || r.photo

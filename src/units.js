@@ -41,6 +41,7 @@ export function fmtVolume(m3, sys = 'm') {
 /** Formatea el valor de una medición según su modo. */
 export function fmtValue(m, sys = 'm') {
   if (m.mode === 'note') return m.text ?? '📝'
+  if (m.unit === '°') return `${m.value.toFixed(1)}°`
   if (m.unit === 'm²') return fmtArea(m.value, sys)
   return fmtLength(m.value, sys)
 }

@@ -35,6 +35,13 @@ del dispositivo.
   conjunto — arrastra y rota cada una, con cotas y export SVG/PNG
 - ⚖️ Pesos de tasación configurables (balcón/terraza/jardín) y **descuento
   NWF** automático de áreas marcadas como «descuento/pendiente» (h &lt; 1.50 m)
+- ⛰️ **Modo pendiente**: ángulo de techos inclinados con dos pares pie/tope,
+  indicando dónde cruza la altura 1.50 m (regla WBS)
+- 🧲 Plano general con **snap de paredes** al soltar y **grosor de muro
+  aparente** entre habitaciones adyacentes
+- 🔗 **Medidor láser por Bluetooth** (Web Bluetooth): conecta el láser DIY
+  de la carpeta [`hardware/`](hardware/) y su lectura se propone sola al
+  calibrar (Chrome/Edge)
 
 ## Desarrollo
 
