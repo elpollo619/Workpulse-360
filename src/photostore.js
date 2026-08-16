@@ -3,15 +3,39 @@
 
 const DB = 'workpulse360'
 const STORE = 'photos'
+const KV = 'kv'
 
 function openDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB, 1)
+    const req = indexedDB.open(DB, 2)
     req.onupgradeneeded = () => {
       if (!req.result.objectStoreNames.contains(STORE)) {
         req.result.createObjectStore(STORE, { keyPath: 'name' })
       }
+      if (!req.result.objectStoreNames.contains(KV)) {
+        req.result.createObjectStore(KV)
+      }
     }
+    req.onsuccess = () => resolve(req.result)
+    req.onerror = () => reject(req.error)
+  })
+}
+
+/** Guarda un valor arbitrario (p. ej. un FileSystemFileHandle) por clave. */
+export async function kvSet(key, value) {
+  const db = await openDB()
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(KV, 'readwrite').objectStore(KV).put(value, key)
+    req.onsuccess = resolve
+    req.onerror = () => reject(req.error)
+  })
+}
+
+/** Recupera un valor por clave (undefined si no existe). */
+export async function kvGet(key) {
+  const db = await openDB()
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(KV, 'readonly').objectStore(KV).get(key)
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error)
   })

@@ -6,7 +6,7 @@ import StereoMode from './StereoMode.jsx'
 import LiveMode from './LiveMode.jsx'
 import Dollhouse3D from './Dollhouse3D.jsx'
 import { openSessionReport, downloadSessionReport, getSessionReportHTML } from './report360.js'
-import { savePhoto, listPhotos, deletePhoto } from './photostore.js'
+import { savePhoto, listPhotos, deletePhoto, kvSet, kvGet } from './photostore.js'
 import { fmtArea } from './units.js'
 import { SIA416_TYPES, DEFAULT_TYPE } from './sia.js'
 import { readGPanoPose, levelFromPose } from './gpano.js'
@@ -54,6 +54,10 @@ export default function App360() {
   const [showDollhouse, setShowDollhouse] = useState(false)
   const [restoring, setRestoring] = useState(true)
   const importRef = useRef(null)
+  // Auto-guardado a archivo real (File System Access): 'off' | 'on' | 'paused'
+  const [autosave, setAutosave] = useState('off')
+  const fileHandleRef = useRef(null)
+  const autosaveTimer = useRef(null)
 
   // Persistencia por nombre de foto.
   useEffect(() => {
@@ -99,6 +103,66 @@ export default function App360() {
       .finally(() => !cancelled && setRestoring(false))
     return () => { cancelled = true }
   }, [])
+
+  function projectData() {
+    return {
+      app: 'workpulse360', version: 1, exportedAt: new Date().toISOString(),
+      store, roomNames, camHeights, roomTypes, levels, weights, prices, unitSys,
+      auditLog: fullAudit(),
+    }
+  }
+
+  // Recuperar el archivo de auto-guardado elegido en sesiones anteriores.
+  useEffect(() => {
+    if (!('showSaveFilePicker' in window)) return
+    kvGet('projectFileHandle').then(async (h) => {
+      if (!h) return
+      fileHandleRef.current = h
+      const perm = await h.queryPermission?.({ mode: 'readwrite' })
+      setAutosave(perm === 'granted' ? 'on' : 'paused')
+    }).catch(() => {})
+  }, [])
+
+  async function writeProjectFile() {
+    const h = fileHandleRef.current
+    if (!h) return
+    try {
+      const w = await h.createWritable()
+      await w.write(JSON.stringify(projectData(), null, 1))
+      await w.close()
+      setAutosave('on')
+    } catch {
+      setAutosave('paused')
+    }
+  }
+
+  // Escritura automática (2 s tras el último cambio) cuando está activo.
+  useEffect(() => {
+    if (autosave !== 'on' || !fileHandleRef.current) return
+    clearTimeout(autosaveTimer.current)
+    autosaveTimer.current = setTimeout(writeProjectFile, 2000)
+    return () => clearTimeout(autosaveTimer.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store, roomNames, camHeights, roomTypes, levels, weights, prices, unitSys])
+
+  async function toggleAutosave() {
+    try {
+      if (autosave === 'paused' && fileHandleRef.current) {
+        // Reanudar: pedir permiso sobre el archivo ya elegido.
+        const perm = await fileHandleRef.current.requestPermission?.({ mode: 'readwrite' })
+        if (perm === 'granted') await writeProjectFile()
+        return
+      }
+      const h = await window.showSaveFilePicker({
+        suggestedName: 'proyecto-workpulse360.json',
+        types: [{ description: 'Proyecto Workpulse 360', accept: { 'application/json': ['.json'] } }],
+      })
+      fileHandleRef.current = h
+      await kvSet('projectFileHandle', h).catch(() => {})
+      await writeProjectFile()
+      appendAudit('autoguardado', `activado en ${h.name}`)
+    } catch { /* selector cancelado */ }
+  }
 
   function renameRoom(photoName) {
     const name = prompt('Nombre del espacio (p.ej. Salón, Cocina):', roomNames[photoName] ?? '')
@@ -242,14 +306,7 @@ export default function App360() {
 
   // Proyecto portable: mediciones + nombres + alturas (las fotos van aparte).
   function exportProject() {
-    const data = {
-      app: 'workpulse360',
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      store, roomNames, camHeights, roomTypes, levels, weights, unitSys,
-      auditLog: fullAudit(),
-    }
-    const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' })
+    const blob = new Blob([JSON.stringify(projectData(), null, 1)], { type: 'application/json' })
     trigger(blob, 'proyecto-workpulse360.json')
     appendAudit('exportar', 'proyecto JSON')
   }
@@ -547,6 +604,14 @@ export default function App360() {
             </>
           )}
           <button onClick={() => importRef.current?.click()} title="Cargar un proyecto o copia completa (.json / .zip)">📂 Importar</button>
+          {'showSaveFilePicker' in window && (
+            <button className={autosave === 'on' ? 'active' : ''} onClick={toggleAutosave}
+              title="Elige un archivo de proyecto una vez y la app lo reescribe sola tras cada cambio — el proyecto sobrevive a cualquier limpieza del navegador">
+              {autosave === 'on' ? '📌 Auto-guardado activo'
+                : autosave === 'paused' ? '📌 Reanudar auto-guardado'
+                : '📌 Auto-guardar en archivo…'}
+            </button>
+          )}
           {photos.length >= 2 && (
             <button onClick={() => setShowStereo(true)}
               title="Máxima precisión: dos fotos de la misma sala + distancia entre cámaras → triangulación pura">
