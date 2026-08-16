@@ -5,6 +5,8 @@ import PlanAssembly from './PlanAssembly.jsx'
 import StereoMode from './StereoMode.jsx'
 import LiveMode from './LiveMode.jsx'
 import Dollhouse3D from './Dollhouse3D.jsx'
+import ShareSession from './ShareSession.jsx'
+import JoinSession from './JoinSession.jsx'
 import { openSessionReport, downloadSessionReport, getSessionReportHTML } from './report360.js'
 import { savePhoto, listPhotos, deletePhoto, kvSet, kvGet } from './photostore.js'
 import { fmtArea } from './units.js'
@@ -52,6 +54,14 @@ export default function App360() {
   const [showStereo, setShowStereo] = useState(false)
   const [showLive, setShowLive] = useState(false)
   const [showDollhouse, setShowDollhouse] = useState(false)
+  // Sesión en vivo: 'sharePhoto' = foto que el anfitrión comparte;
+  // 'joinOffer' = código de invitación cuando se llega por enlace #join=.
+  const [sharePhoto, setSharePhoto] = useState(null)
+  const [joinOffer, setJoinOffer] = useState(() => {
+    const m = /#join=([A-Za-z0-9_-]+)/.exec(location.hash)
+    if (m) history.replaceState(null, '', location.pathname)
+    return m ? m[1] : null
+  })
   const [restoring, setRestoring] = useState(true)
   const importRef = useRef(null)
   // Auto-guardado a archivo real (File System Access): 'off' | 'on' | 'paused'
@@ -398,8 +408,44 @@ export default function App360() {
     return getSessionReportHTML(store, roomNames, { unitSys, roomTypes, weights, camHeights, levels, prices })
   }
 
-  if (active) {
-    return (
+  // La sesión en vivo debe sobrevivir al cambio portada ↔ visor: estas capas
+  // se montan UNA sola vez, en una posición fija del árbol (ver el return).
+  const liveOverlays = (
+    <>
+      {sharePhoto && (
+        <ShareSession
+          photo={sharePhoto}
+          measurements={store[sharePhoto.name] ?? []}
+          roomName={roomNames[sharePhoto.name]}
+          onClose={() => setSharePhoto(null)}
+        />
+      )}
+      {joinOffer && (
+        <JoinSession
+          offerCode={joinOffer}
+          onPhoto={({ name, roomName: rn, blob }) => {
+            const localName = `en-vivo-${name}`
+            savePhoto(localName, blob).catch(() => {})
+            setPhotos((prev) => prev.some((p) => p.name === localName)
+              ? prev
+              : [...prev, { name: localName, url: URL.createObjectURL(blob) }])
+            if (rn) setRoomNames((prev) => ({ ...prev, [localName]: rn }))
+            setActiveName(localName)
+          }}
+          onMeasurements={(name, list) => {
+            setStore((prev) => ({ ...prev, [`en-vivo-${name}`]: list }))
+          }}
+          onClose={() => setJoinOffer(null)}
+        />
+      )}
+    </>
+  )
+
+  // El visor se prepara como variable (no con un return temprano) para que
+  // liveOverlays conserve SIEMPRE la misma posición en el árbol de React:
+  // si cambiara de sitio al pasar de portada a visor, React desmontaría la
+  // sesión en vivo y cortaría la conexión P2P.
+  const viewerBody = !active ? null : (
       <div className="app360-stage">
         <Pano360View
           key={active.name}
@@ -487,8 +533,7 @@ export default function App360() {
           />
         )}
       </div>
-    )
-  }
+  )
 
   const totalMeasurements = Object.values(store).reduce((s, ms) => s + ms.length, 0)
   const roomsWithOutline = Object.values(store)
@@ -499,6 +544,9 @@ export default function App360() {
     .reduce((s, m) => s + m.value, 0)
 
   return (
+    <>
+    {liveOverlays}
+    {viewerBody ?? (
     <div className="app360-landing">
       <header className="brand">
         <h1>Workpulse<span>360</span></h1>
@@ -578,6 +626,12 @@ export default function App360() {
               <button onClick={() => setShowAssembly(true)}
                 title="Ensamblar todas las habitaciones en un plano de conjunto">
                 🧩 Plano general
+              </button>
+            )}
+            {photos.length > 0 && (
+              <button onClick={() => setSharePhoto(photos.find((p) => p.name === activeName) ?? photos[0])}
+                title="El cliente ve tu foto y tus mediciones en directo, de dispositivo a dispositivo, sin servidores ni cuentas">
+                🔴 Compartir en vivo
               </button>
             )}
             {roomsWithOutline > 0 && (
@@ -721,5 +775,7 @@ export default function App360() {
         />
       )}
     </div>
+    )}
+    </>
   )
 }
