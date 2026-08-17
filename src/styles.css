@@ -811,6 +811,15 @@ details.app360-step p { margin-top: 10px; }
 .coach .hint { color: var(--ink-2); }
 .coach button { width: 100%; text-align: left; }
 .coach button.active { text-align: center; }
+.coach .wizard-remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.coach .wizard-remember input { accent-color: var(--orange); }
 .wizard-reading {
   font-family: var(--font-mono);
   font-size: 30px;

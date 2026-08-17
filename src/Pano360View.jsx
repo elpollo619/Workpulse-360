@@ -105,6 +105,7 @@ export default function Pano360View({
   imageURL, measurements = [], onSave, onDelete, onRename, onOpenPlan, onClose,
   extraControls, initialCamHeight = 1.6, onCamHeight, unitSys = 'm', onUnitSys,
   initialLevel = { pitch: 0, roll: 0 }, onLevel, calibrated = false, onAIResult,
+  onRememberTripod,
 }) {
   const mountRef = useRef(null)
   const stateRef = useRef({})
@@ -131,6 +132,8 @@ export default function Pano360View({
   const [wizard, setWizard] = useState(() => !calibrated)
   const [wizardStep, setWizardStep] = useState('ask') // ask | manual | laser
   const [wizardHeight, setWizardHeight] = useState('1.60')
+  // «Es mi trípode de siempre»: guarda la altura para calibrar solas las fotos futuras.
+  const [wizardRemember, setWizardRemember] = useState(true)
   // Modo simple por defecto: 3 herramientas; «Más» desbloquea el resto.
   const [pro, setPro] = useState(() => localStorage.getItem('workpulse360.pro.v1') === '1')
   const SIMPLE_IDS = ['distance', 'path', 'height']
@@ -477,7 +480,7 @@ export default function Pano360View({
   }
 
   // Cierra el asistente dejando al usuario listo para su primera medida.
-  function finishWizard(height, viaDoor = false) {
+  function finishWizard(height, viaDoor = false, remember = false) {
     setWizard(false)
     if (viaDoor) {
       setMode('calibv')
@@ -487,6 +490,7 @@ export default function Pano360View({
       const h = Math.round(height * 1000) / 1000
       if (h === camHeight) onCamHeight?.(h)
       else setCamHeight(h)
+      if (remember) onRememberTripod?.(h)
     }
     setMode('distance')
     setTimeout(() => setMessage('📏 Listo. Toca DOS puntos del SUELO y tendrás tu primera medida.'), 50)
@@ -1244,8 +1248,15 @@ export default function Pano360View({
                   style={{ flex: 1 }} autoFocus
                 /> m
               </label>
+              {onRememberTripod && (
+                <label className="row wizard-remember">
+                  <input type="checkbox" checked={wizardRemember}
+                    onChange={(e) => setWizardRemember(e.target.checked)} />
+                  Es mi trípode de siempre — calibrar solas las próximas fotos
+                </label>
+              )}
               <button className="active"
-                onClick={() => finishWizard(parseFloat(String(wizardHeight).replace(',', '.')) || 1.6)}>
+                onClick={() => finishWizard(parseFloat(String(wizardHeight).replace(',', '.')) || 1.6, false, wizardRemember)}>
                 ✓ Fijar y empezar a medir
               </button>
               <button onClick={() => setWizardStep('ask')}>← Volver</button>
@@ -1261,8 +1272,15 @@ export default function Pano360View({
               <div className="wizard-reading">
                 {laserReading != null ? `${laserReading.toFixed(3)} m` : laser ? 'esperando disparo…' : 'conectando…'}
               </div>
+              {onRememberTripod && (
+                <label className="row wizard-remember">
+                  <input type="checkbox" checked={wizardRemember}
+                    onChange={(e) => setWizardRemember(e.target.checked)} />
+                  Es mi trípode de siempre — calibrar solas las próximas fotos
+                </label>
+              )}
               <button className="active" disabled={laserReading == null}
-                onClick={() => finishWizard(laserReading)}>
+                onClick={() => finishWizard(laserReading, false, wizardRemember)}>
                 ⤓ Fijar y empezar a medir
               </button>
               <button onClick={() => setWizardStep('ask')}>← Volver</button>

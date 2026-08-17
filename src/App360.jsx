@@ -22,6 +22,7 @@ const TYPES_KEY = 'workpulse360.roomtypes.v1'
 const WEIGHTS_KEY = 'workpulse360.weights.v1'
 const LEVEL_KEY = 'workpulse360.level.v1'
 const PRICES_KEY = 'workpulse360.prices.v1'
+const TRIPOD_KEY = 'workpulse360.tripod.v1'
 
 const DEFAULT_WEIGHTS = { BALKON: 0.5, TERRASSE: 1 / 3, GARTEN: 0.1 }
 
@@ -49,6 +50,12 @@ export default function App360() {
   const [levels, setLevels] = useState(() => loadJSON(LEVEL_KEY)) // { [photoName]: {pitch, roll} }
   const [prices, setPrices] = useState(() => ({ paint: 0, floor: 0, ...loadJSON(PRICES_KEY) })) // CHF/m²
   const [unitSys, setUnitSys] = useState(() => localStorage.getItem(UNITS_KEY) || 'm')
+  // Altura del trípode habitual (suelo → centro del objetivo): se mide una vez
+  // y toda foto sin calibrar queda calibrada sola con este valor.
+  const [tripodHeight, setTripodHeight] = useState(() => {
+    const v = parseFloat(localStorage.getItem(TRIPOD_KEY))
+    return Number.isFinite(v) && v > 0 ? v : null
+  })
   const [showPlan, setShowPlan] = useState(false)
   const [showAssembly, setShowAssembly] = useState(false)
   const [showStereo, setShowStereo] = useState(false)
@@ -94,6 +101,22 @@ export default function App360() {
   useEffect(() => {
     localStorage.setItem(PRICES_KEY, JSON.stringify(prices))
   }, [prices])
+  useEffect(() => {
+    if (tripodHeight != null) localStorage.setItem(TRIPOD_KEY, String(tripodHeight))
+    else localStorage.removeItem(TRIPOD_KEY)
+  }, [tripodHeight])
+
+  // Calibración automática: cualquier foto sin altura propia hereda la del trípode.
+  useEffect(() => {
+    if (tripodHeight == null || photos.length === 0) return
+    setCamHeights((prev) => {
+      const missing = photos.filter((p) => prev[p.name] == null)
+      if (missing.length === 0) return prev
+      const next = { ...prev }
+      for (const p of missing) next[p.name] = tripodHeight
+      return next
+    })
+  }, [photos, tripodHeight])
 
   // Restaurar las fotos guardadas en IndexedDB (la sesión sobrevive recargas).
   useEffect(() => {
@@ -404,6 +427,29 @@ export default function App360() {
     }
   }
 
+  function editTripod() {
+    const cur = tripodHeight != null ? String(tripodHeight) : '1.45'
+    const raw = prompt(
+      'Altura de tu trípode: del suelo al CENTRO del objetivo, con la cámara ya montada (en metros).\n' +
+      'Se guarda para siempre y cada foto nueva queda calibrada sola.\n\n' +
+      'Deja el campo vacío y acepta para borrarla.',
+      cur,
+    )
+    if (raw == null) return
+    if (!raw.trim()) {
+      setTripodHeight(null)
+      appendAudit('tripode', 'altura de trípode borrada')
+      return
+    }
+    const v = parseFloat(raw.replace(',', '.'))
+    if (!Number.isFinite(v) || v < 0.3 || v > 3) {
+      alert('Escribe una altura en metros entre 0.30 y 3.00 (por ejemplo 1.45).')
+      return
+    }
+    setTripodHeight(Math.round(v * 1000) / 1000)
+    appendAudit('tripode', `altura de trípode fijada: ${v.toFixed(3)} m`)
+  }
+
   function buildShareableReport() {
     return getSessionReportHTML(store, roomNames, { unitSys, roomTypes, weights, camHeights, levels, prices })
   }
@@ -456,8 +502,8 @@ export default function App360() {
           onRename={renameMeasurement}
           onOpenPlan={() => setShowPlan(true)}
           onClose={() => setActiveName(null)}
-          initialCamHeight={camHeights[active.name] ?? 1.6}
-          calibrated={camHeights[active.name] != null}
+          initialCamHeight={camHeights[active.name] ?? tripodHeight ?? 1.6}
+          calibrated={camHeights[active.name] != null || tripodHeight != null}
           onAIResult={(r) => {
             const photo = active.name
             if (r.nombre && !roomNames[photo]) {
@@ -485,6 +531,7 @@ export default function App360() {
             appendAudit('ia', `${photo} · análisis automático (${r.nombre ?? '—'} / ${r.tipo ?? '—'})`)
           }}
           onCamHeight={(h) => setCamHeights((prev) => (prev[active.name] === h ? prev : { ...prev, [active.name]: h }))}
+          onRememberTripod={(h) => setTripodHeight(h)}
           unitSys={unitSys}
           onUnitSys={setUnitSys}
           initialLevel={levels[active.name] ?? { pitch: 0, roll: 0 }}
@@ -657,6 +704,10 @@ export default function App360() {
               <button onClick={exportBackup} title="Copia de seguridad completa: fotos + mediciones en un ZIP">🗄️ Copia completa</button>
             </>
           )}
+          <button className={tripodHeight != null ? 'active' : ''} onClick={editTripod}
+            title="Mide una vez del suelo al centro del objetivo (con la cámara montada); desde entonces cada foto nueva queda calibrada sola con esa altura">
+            📷 Mi trípode: {tripodHeight != null ? `${tripodHeight.toFixed(2)} m` : 'sin fijar'}
+          </button>
           <button onClick={() => importRef.current?.click()} title="Cargar un proyecto o copia completa (.json / .zip)">📂 Importar</button>
           {'showSaveFilePicker' in window && (
             <button className={autosave === 'on' ? 'active' : ''} onClick={toggleAutosave}
